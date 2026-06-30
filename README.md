@@ -1,5 +1,9 @@
 # mandro Android 프로젝트 구조
 
+## 데모 영상
+
+https://github.com/user-attachments/assets/70a54704-5914-45a6-ac54-dcddce8aab29
+
 ## 패키지 구조
 
 ```
