@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mandro.BuildConfig
 import com.mandro.domain.model.GestureSet
 import com.mandro.presentation.components.MandroPrimaryButton
 import com.mandro.presentation.components.MandroSecondaryButton
@@ -52,6 +53,7 @@ fun CollectScreen(
     CollectContent(
         uiState = uiState,
         onStartTrainingEarly = viewModel::onStartTrainingEarly,
+        onDebugSkip = viewModel::onDebugSkip,
     )
 }
 
@@ -59,6 +61,7 @@ fun CollectScreen(
 private fun CollectContent(
     uiState: CollectUiState,
     onStartTrainingEarly: () -> Unit = {},
+    onDebugSkip: () -> Unit = {},
 ) {
     val lapProgressAnim by animateFloatAsState(
         targetValue = uiState.lapProgress,
@@ -238,6 +241,21 @@ private fun CollectContent(
         }
 
         Spacer(Modifier.height(24.dp))
+
+        // 개발 전용 스킵 버튼
+        if (BuildConfig.DEBUG) {
+            TextButton(
+                onClick = onDebugSkip,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "[DEV] 다음 화면으로 →",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MandroPalette.Danger600,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
 
         // 랩 내 동작 현황
         Text(

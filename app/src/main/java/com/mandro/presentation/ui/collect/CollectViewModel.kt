@@ -50,6 +50,10 @@ class CollectViewModel @Inject constructor() : ViewModel() {
         _uiState.update { it.copy(isDone = true) }
     }
 
+    fun onDebugSkip() {
+        _uiState.update { it.copy(isDone = true) }
+    }
+
     private fun startCountdown() {
         viewModelScope.launch {
             for (count in 3 downTo 1) {
