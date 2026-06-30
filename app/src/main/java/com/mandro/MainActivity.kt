@@ -34,6 +34,7 @@ import com.mandro.presentation.ui.home.HomeScreen
 import com.mandro.presentation.ui.splash.SplashScreen
 import com.mandro.presentation.ui.user.UserScreen
 import com.mandro.presentation.ui.collect.CollectScreen
+import com.mandro.presentation.ui.firmware.FirmwareScreen
 import com.mandro.presentation.ui.training.TrainingProgressScreen
 import com.mandro.presentation.ui.waveform.WaveformScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -177,6 +178,15 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.TrainingProgress.route) {
                             TrainingProgressScreen(
+                                onDone = {
+                                    navController.navigate(Screen.Firmware.route) {
+                                        popUpTo(Screen.Training.route)
+                                    }
+                                },
+                            )
+                        }
+                        composable(Screen.Firmware.route) {
+                            FirmwareScreen(
                                 onDone = {
                                     navController.navigate(Screen.Waveform.route) {
                                         popUpTo(Screen.Training.route)
