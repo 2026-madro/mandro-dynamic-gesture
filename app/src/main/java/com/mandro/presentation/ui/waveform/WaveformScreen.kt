@@ -75,12 +75,18 @@ private fun WaveformContent(
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "신호 모니터",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MandroPalette.White,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "신호 모니터",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MandroPalette.White,
+                )
+                Text(
+                    text = "신호가 들어오지 않는 채널이 있는지 확인해주세요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MandroPalette.Neutral500,
+                )
+            }
             ConnectionBadge(bleState = uiState.bleState)
         }
 
