@@ -82,6 +82,9 @@ dependencies {
     // ── DataStore ─────────────────────────────────────────────
     implementation(libs.datastore.preferences)
 
+    // ── 애니메이션 ────────────────────────────────────────────
+    implementation(libs.lottie)
+
     // ── ML: TFLite ────────────────────────────────────────────
     implementation(libs.tflite)
     implementation(libs.tflite.support)

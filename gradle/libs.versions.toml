@@ -18,6 +18,7 @@ okhttp              = "4.12.0"
 
 tflite              = "2.16.1"
 tfliteSupport       = "0.4.4"
+lottie              = "6.6.0"
 
 junit               = "4.13.2"
 junitExt            = "1.2.1"
@@ -68,6 +69,7 @@ datastore-preferences       = { group = "androidx.datastore", name = "datastore-
 # ── TFLite ────────────────────────────────────────────────────
 tflite                      = { group = "org.tensorflow",      name = "tensorflow-lite",         version.ref = "tflite" }
 tflite-support              = { group = "org.tensorflow",      name = "tensorflow-lite-support",  version.ref = "tfliteSupport" }
+lottie                      = { group = "com.airbnb.android",  name = "lottie-compose",           version.ref = "lottie" }
 
 # ── Test ──────────────────────────────────────────────────────
 junit                       = { group = "junit",               name = "junit",                   version.ref = "junit" }

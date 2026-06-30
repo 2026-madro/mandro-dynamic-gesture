@@ -84,7 +84,7 @@ private fun UserContent(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "이름을 입력하면 나만의 설정을 만들어드려요",
+                        text = "이름을 입력하면 나만의 설정을 만드로 드려요",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MandroPalette.Neutral500,
                     )
@@ -96,7 +96,7 @@ private fun UserContent(
                     NameTextField(
                         value = uiState.name,
                         onValueChange = onNameChange,
-                        placeholder = "이름 입력...",
+                        placeholder = "이름을 입력해주세요",
                         errorMessage = uiState.error,
                     )
                     Spacer(Modifier.height(32.dp))

@@ -11,8 +11,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mandro.presentation.navigation.Screen
 import com.mandro.presentation.theme.MandroTheme
+import com.mandro.presentation.ui.ble.BleScreen
+import com.mandro.presentation.ui.guide.GuideScreen
 import com.mandro.presentation.ui.home.HomeScreen
 import com.mandro.presentation.ui.splash.SplashScreen
+import com.mandro.presentation.ui.user.UserScreen
+import com.mandro.presentation.ui.waveform.WaveformScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -32,8 +36,33 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.Home.route) {
                             HomeScreen(
+                                onAddUser = {
+                                    navController.navigate(Screen.UserCreate.route)
+                                },
                                 onConnectBand = {
                                     navController.navigate(Screen.BleScan.route)
+                                },
+                            )
+                        }
+                        composable(Screen.UserCreate.route) {
+                            UserScreen(
+                                onBack = { navController.popBackStack() },
+                                onStart = { navController.navigate(Screen.BleScan.route) },
+                            )
+                        }
+                        composable(Screen.BleScan.route) {
+                            BleScreen(
+                                onBack = { navController.popBackStack() },
+                            )
+                        }
+                        composable(Screen.Waveform.route) {
+                            WaveformScreen()
+                        }
+                        composable(Screen.Guide.route) {
+                            GuideScreen(
+                                onBack = { navController.popBackStack() },
+                                onStartRecord = {
+                                    navController.navigate(Screen.Collect.route)
                                 },
                             )
                         }
