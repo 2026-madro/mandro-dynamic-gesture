@@ -72,7 +72,7 @@ private fun WaveformContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -88,7 +88,7 @@ private fun WaveformContent(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
             // TODO: 채널 수 4/6/8 전환 시 EMG_CHANNELS → uiState.activeChannels로 교체
@@ -123,7 +123,7 @@ private fun ChannelRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.padding(vertical = 2.dp),
+        modifier = modifier.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 채널 라벨 (탭하면 on/off)

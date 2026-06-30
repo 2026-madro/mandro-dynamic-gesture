@@ -18,7 +18,15 @@ data class BleUiState(
 @HiltViewModel
 class BleViewModel @Inject constructor() : ViewModel() {
 
-    private val _uiState = MutableStateFlow(BleUiState())
+    // TODO: 실제 BLE 스캔 연결 후 BleUiState()로 되돌리기
+    private val _uiState = MutableStateFlow(BleUiState(
+        bleState = BleState.DevicesFound(
+            listOf(
+                BleDevice("EMG-Sensor-A4F2", "00:11:22:33:44:55", -55),
+                BleDevice("EMG-Sensor-B3C1", "00:11:22:33:44:66", -82),
+            )
+        )
+    ))
     val uiState = _uiState.asStateFlow()
 
     fun onConnectClick(device: BleDevice) {

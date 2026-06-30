@@ -25,17 +25,17 @@ sealed class Screen(val route: String) {
 val BOTTOM_NAV_ITEMS = listOf(
     BottomNavItem(
         screen = Screen.Waveform,
-        label  = "파형",
+        label  = "신호",
         icon   = "waveform",
     ),
     BottomNavItem(
         screen = Screen.Training,
-        label  = "학습",
+        label  = "등록",
         icon   = "learning",
     ),
     BottomNavItem(
         screen = Screen.Classify,
-        label  = "동작 인식",
+        label  = "인식",
         icon   = "classify",
     ),
     BottomNavItem(

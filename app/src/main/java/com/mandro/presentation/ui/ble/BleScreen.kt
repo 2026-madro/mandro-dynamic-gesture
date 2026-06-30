@@ -35,7 +35,10 @@ fun BleScreen(
     BleContent(
         uiState = uiState,
         onBack = onBack,
-        onConnectClick = viewModel::onConnectClick,
+        onConnectClick = {
+            viewModel.onConnectClick(it)
+            onConnected()
+        },
         onRescan = viewModel::onRescan,
     )
 }
@@ -228,7 +231,6 @@ private fun DeviceCard(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MandroPalette.White,
-        shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
