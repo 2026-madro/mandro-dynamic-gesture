@@ -131,6 +131,7 @@ private fun GuideContent(
                                 .height(3.dp),
                             color = MandroPalette.Primary600,
                             trackColor = MandroPalette.Neutral100,
+                            drawStopIndicator = {},
                         )
 
                         Spacer(Modifier.height(24.dp))

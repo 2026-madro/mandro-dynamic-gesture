@@ -33,6 +33,7 @@ import com.mandro.presentation.ui.guide.GuideScreen
 import com.mandro.presentation.ui.home.HomeScreen
 import com.mandro.presentation.ui.splash.SplashScreen
 import com.mandro.presentation.ui.user.UserScreen
+import com.mandro.presentation.ui.collect.CollectScreen
 import com.mandro.presentation.ui.waveform.WaveformScreen
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -161,6 +162,15 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() },
                                 onStartRecord = {
                                     navController.navigate(Screen.Collect.route)
+                                },
+                            )
+                        }
+                        composable(Screen.Collect.route) {
+                            CollectScreen(
+                                onDone = {
+                                    navController.navigate(Screen.TrainingProgress.route) {
+                                        popUpTo(Screen.Training.route)
+                                    }
                                 },
                             )
                         }
