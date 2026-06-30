@@ -4,7 +4,7 @@ sealed class Screen(val route: String) {
     object Splash      : Screen("splash")
     object Home        : Screen("home")
     object UserCreate  : Screen("user/create")
-    object BleScann    : Screen("ble/scan")
+    object BleScan     : Screen("ble/scan")
 
     // 메인 탭
     object Waveform    : Screen("main/waveform")

@@ -1,0 +1,312 @@
+package com.mandro.presentation.ui.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mandro.domain.model.BleDevice
+import com.mandro.domain.model.BleState
+import com.mandro.domain.model.GestureSet
+import com.mandro.domain.model.User
+import com.mandro.presentation.components.ConnectionBadge
+import com.mandro.presentation.components.MandroPrimaryButton
+import com.mandro.presentation.theme.MandroPalette
+import com.mandro.presentation.theme.MandroTheme
+
+@Composable
+fun HomeScreen(
+    viewModel: HomeViewModel = hiltViewModel(),
+    onUserClick: (User) -> Unit = {},
+    onAddUser: () -> Unit = {},
+    onConnectBand: () -> Unit = {},
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    HomeContent(
+        uiState = uiState,
+        onUserClick = onUserClick,
+        onAddUser = onAddUser,
+        onConnectBand = onConnectBand,
+    )
+}
+
+@Composable
+private fun HomeContent(
+    uiState: HomeUiState,
+    onUserClick: (User) -> Unit,
+    onAddUser: () -> Unit,
+    onConnectBand: () -> Unit,
+) {
+    Scaffold(
+        containerColor = MandroPalette.Neutral50,
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    Spacer(Modifier.height(32.dp))
+                    Text(
+                        text = "안녕하세요 👋",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MandroPalette.Neutral900,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "유저를 선택하거나 새로 만드로 주세요",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MandroPalette.Neutral500,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                item {
+                    BandConnectionCard(bleState = uiState.bleState)
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                item {
+                    Text(
+                        text = "유저 선택",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MandroPalette.Neutral900,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                items(uiState.users) { user ->
+                    UserCard(user = user, onClick = { onUserClick(user) })
+                }
+
+                item {
+                    AddUserCard(onClick = onAddUser)
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
+
+            MandroPrimaryButton(
+                text = "암밴드 연결하기",
+                onClick = onConnectBand,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BandConnectionCard(bleState: BleState) {
+    val isConnected = bleState is BleState.Connected
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MandroPalette.Neutral100,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (isConnected) "🔗" else "🔌",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isConnected) "암밴드가 연결됐어요" else "암밴드가 연결되지 않았어요",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MandroPalette.Neutral900,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (isConnected) "연결 상태가 좋아요" else "아래 버튼을 눌러 암밴드를 연결해 주세요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MandroPalette.Neutral500,
+                )
+            }
+            ConnectionBadge(bleState = bleState)
+        }
+    }
+}
+
+@Composable
+fun UserCard(user: User, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MandroPalette.White,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MandroPalette.Primary100),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = MandroPalette.Primary600,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = user.name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MandroPalette.Neutral900,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (user.hasModel) "모델 있음" else "모델 없음",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (user.hasModel) MandroPalette.Success600 else MandroPalette.Neutral500,
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MandroPalette.Neutral300,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddUserCard(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 1.5.dp,
+                color = MandroPalette.Neutral300,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = MandroPalette.Neutral500,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "새 유저 추가",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MandroPalette.Neutral500,
+            )
+        }
+    }
+}
+
+// ── 프리뷰 ────────────────────────────────────────────────────
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun HomePreview_WithUsers() {
+    MandroTheme {
+        HomeContent(
+            uiState = HomeUiState(
+                users = listOf(
+                    User(name = "HAERIM", hasModel = true),
+                    User(name = "KOTA", hasModel = true),
+                    User(name = "S003", hasModel = true),
+                ),
+                bleState = BleState.Disconnected,
+            ),
+            onUserClick = {},
+            onAddUser = {},
+            onConnectBand = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun HomePreview_Empty() {
+    MandroTheme {
+        HomeContent(
+            uiState = HomeUiState(
+                users = emptyList(),
+                bleState = BleState.Disconnected,
+            ),
+            onUserClick = {},
+            onAddUser = {},
+            onConnectBand = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun HomePreview_Connected() {
+    MandroTheme {
+        HomeContent(
+            uiState = HomeUiState(
+                users = listOf(User(name = "HAERIM", hasModel = true)),
+                bleState = BleState.Connected(
+                    BleDevice("EMG-Sensor-1A2B", "00:11:22:33:44:55", -55)
+                ),
+            ),
+            onUserClick = {},
+            onAddUser = {},
+            onConnectBand = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun UserCardPreview() {
+    MandroTheme {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            UserCard(user = User(name = "HAERIM", hasModel = true, gestureSet = GestureSet.SIX_CLASS), onClick = {})
+            UserCard(user = User(name = "S003", hasModel = false, gestureSet = GestureSet.FOUR_CLASS), onClick = {})
+        }
+    }
+}

@@ -41,6 +41,7 @@ compose-material3           = { group = "androidx.compose.material3", name = "ma
 compose-activity            = { group = "androidx.activity",   name = "activity-compose",       version.ref = "activityCompose" }
 compose-viewmodel           = { group = "androidx.lifecycle",  name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 compose-navigation          = { group = "androidx.navigation", name = "navigation-compose",     version.ref = "navigationCompose" }
+compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 
 # ── Coroutines ────────────────────────────────────────────────
 coroutines-android          = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

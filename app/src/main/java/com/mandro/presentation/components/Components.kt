@@ -3,14 +3,23 @@ package com.mandro.presentation.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mandro.domain.model.BleState
 import com.mandro.presentation.theme.MandroPalette
+import com.mandro.presentation.theme.MandroTheme
 
 // ── 버튼 ─────────────────────────────────────────────────────
 
@@ -221,6 +230,103 @@ fun ConsentCheckboxRow(
                     }
                 }
             }
+        }
+    }
+}
+
+// ── 텍스트필드 ────────────────────────────────────────────────
+
+@Composable
+fun NameTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    errorMessage: String? = null,
+    imeAction: ImeAction = ImeAction.Done,
+    onImeAction: () -> Unit = {},
+) {
+    Column(modifier = modifier) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MandroPalette.Neutral700,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MandroPalette.Neutral300,
+                )
+            },
+            isError = errorMessage != null,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = imeAction),
+            keyboardActions = KeyboardActions(
+                onAny = { onImeAction() },
+            ),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor   = MandroPalette.Primary600,
+                unfocusedBorderColor = MandroPalette.Neutral300,
+                errorBorderColor     = MandroPalette.Danger600,
+                focusedTextColor     = MandroPalette.Neutral900,
+                unfocusedTextColor   = MandroPalette.Neutral900,
+                cursorColor          = MandroPalette.Primary600,
+                focusedContainerColor   = MandroPalette.White,
+                unfocusedContainerColor = MandroPalette.White,
+            ),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (errorMessage != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.labelSmall,
+                color = MandroPalette.Danger600,
+                modifier = Modifier.padding(start = 6.dp)
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun NameTextFieldPreview() {
+    MandroTheme {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            var name by remember { mutableStateOf("") }
+            NameTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = "이름",
+                placeholder = "이름을 입력해 주세요",
+            )
+            NameTextField(
+                value = "HAERIM",
+                onValueChange = {},
+                label = "이름",
+                placeholder = "이름을 입력해 주세요",
+            )
+            NameTextField(
+                value = "",
+                onValueChange = {},
+                label = "이름",
+                placeholder = "이름을 입력해 주세요",
+                errorMessage = "이름을 입력해 주세요.",
+            )
         }
     }
 }
