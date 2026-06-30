@@ -33,6 +33,7 @@ import com.mandro.presentation.ui.guide.GuideScreen
 import com.mandro.presentation.ui.home.HomeScreen
 import com.mandro.presentation.ui.splash.SplashScreen
 import com.mandro.presentation.ui.user.UserScreen
+import com.mandro.presentation.ui.classify.ClassifyScreen
 import com.mandro.presentation.ui.collect.CollectScreen
 import com.mandro.presentation.ui.firmware.FirmwareScreen
 import com.mandro.presentation.ui.training.TrainingProgressScreen
@@ -154,7 +155,11 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.Classify.route) {
-                            // TODO: ClassifyScreen 구현 후 교체
+                            ClassifyScreen(
+                                onRelearn = {
+                                    navController.navigate(Screen.Training.route)
+                                },
+                            )
                         }
                         composable(Screen.Settings.route) {
                             // TODO: SettingsScreen 구현 후 교체
@@ -188,7 +193,7 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Firmware.route) {
                             FirmwareScreen(
                                 onDone = {
-                                    navController.navigate(Screen.Waveform.route) {
+                                    navController.navigate(Screen.Classify.route) {
                                         popUpTo(Screen.Training.route)
                                     }
                                 },
