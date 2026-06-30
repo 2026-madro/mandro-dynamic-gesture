@@ -1,6 +1,11 @@
 package com.mandro.presentation.ui.guide
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -88,16 +93,16 @@ private fun GuideContent(
                 }
 
                 // 동작명 + 진행 바
+                val progressAnim by animateFloatAsState(
+                    targetValue = (uiState.currentIndex + 1).toFloat() / uiState.total,
+                    animationSpec = tween(durationMillis = 400),
+                    label = "progress",
+                )
+
                 AnimatedContent(
                     targetState = uiState.currentIndex,
                     transitionSpec = {
-                        if (targetState > initialState) {
-                            slideInHorizontally { it } + fadeIn() togetherWith
-                                slideOutHorizontally { -it } + fadeOut()
-                        } else {
-                            slideInHorizontally { -it } + fadeIn() togetherWith
-                                slideOutHorizontally { it } + fadeOut()
-                        }
+                        fadeIn(tween(300)) togetherWith fadeOut(tween(200))
                     },
                     label = "gesture_anim",
                 ) { index ->
@@ -120,7 +125,7 @@ private fun GuideContent(
 
                         // 진행 바
                         LinearProgressIndicator(
-                            progress = { (index + 1).toFloat() / uiState.total },
+                            progress = { progressAnim },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(3.dp),
