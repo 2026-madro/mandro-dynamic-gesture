@@ -6,12 +6,15 @@ import android.bluetooth.le.*
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.mandro.domain.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "BleManager"
 
 private const val EMG_SERVICE_UUID        = "12345678-1234-1234-1234-1234567890ab"
 private const val EMG_CHARACTERISTIC_UUID = "abcd1234-5678-1234-5678-abcdef123456"
@@ -37,6 +40,7 @@ class BleManager @Inject constructor(
     val emgStream: SharedFlow<EmgSample> = _emgStream.asSharedFlow()
 
     private var gatt: BluetoothGatt? = null
+    private var packetCount = 0
 
     // ── 스캔 ──────────────────────────────────────────────────
 
@@ -67,6 +71,7 @@ class BleManager @Inject constructor(
 
         foundDevices.clear()
         _bleState.value = BleState.Scanning
+        Log.d(TAG, "스캔 시작")
 
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -75,6 +80,7 @@ class BleManager @Inject constructor(
         try {
             scanner.startScan(null, settings, scanCallback)
         } catch (e: SecurityException) {
+            Log.e(TAG, "스캔 시작 실패: ${e.message}")
             _bleState.value = BleState.Error("블루투스 스캔을 시작할 수 없습니다: ${e.message}")
         }
     }
@@ -101,6 +107,7 @@ class BleManager @Inject constructor(
                 )
                 if (foundDevices.none { it.address == device.address }) {
                     foundDevices.add(device)
+                    Log.d(TAG, "기기 발견: ${device.name} (${device.address}) RSSI=${device.rssi}")
                     _bleState.value = BleState.DevicesFound(foundDevices.toList())
                 }
             } catch (e: SecurityException) {
@@ -143,10 +150,12 @@ class BleManager @Inject constructor(
             try {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
+                        Log.d(TAG, "GATT 연결됨 — MTU 요청 ($MTU_SIZE bytes)")
                         gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                         gatt.requestMtu(MTU_SIZE)
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
+                        Log.d(TAG, "GATT 연결 끊김 (status=$status)")
                         this@BleManager.gatt?.close()
                         this@BleManager.gatt = null
                         _bleState.value = BleState.Disconnected
@@ -158,6 +167,7 @@ class BleManager @Inject constructor(
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            Log.d(TAG, "MTU 협상 완료: ${mtu} bytes (status=$status) — 서비스 탐색 시작")
             try {
                 gatt.discoverServices()
             } catch (e: SecurityException) {
@@ -167,10 +177,12 @@ class BleManager @Inject constructor(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             try {
+                Log.d(TAG, "서비스 탐색 완료 (status=$status)")
                 val characteristic = gatt
                     .getService(java.util.UUID.fromString(EMG_SERVICE_UUID))
                     ?.getCharacteristic(java.util.UUID.fromString(EMG_CHARACTERISTIC_UUID))
                     ?: run {
+                        Log.e(TAG, "EMG 서비스/캐릭터리스틱 없음 — UUID 불일치 가능성")
                         _bleState.value = BleState.Error("암밴드를 찾지 못했어요. 전원을 확인하고 다시 시도해 주세요.")
                         return
                     }
@@ -181,6 +193,7 @@ class BleManager @Inject constructor(
                     it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                     gatt.writeDescriptor(it)
                 }
+                Log.d(TAG, "Notify 등록 완료")
 
                 val deviceName = try { gatt.device.name } catch (e: SecurityException) { null }
                 val connectedDevice = BleDevice(
@@ -188,6 +201,7 @@ class BleManager @Inject constructor(
                     address = gatt.device.address,
                     rssi = 0,
                 )
+                Log.i(TAG, "연결 완료: ${connectedDevice.name} (${connectedDevice.address})")
                 _bleState.value = BleState.Connected(connectedDevice)
             } catch (e: SecurityException) {
                 _bleState.value = BleState.Error("서비스 설정 중 권한 오류가 발생했습니다.")
@@ -210,7 +224,16 @@ class BleManager @Inject constructor(
      * byte[s*8 + ch] → 채널 ch의 s번째 샘플값 (0~255)
      */
     private fun parseEmgPacket(bytes: ByteArray) {
-        if (bytes.size != PACKET_SIZE) return
+        if (bytes.size != PACKET_SIZE) {
+            Log.w(TAG, "예상치 못한 패킷 크기: ${bytes.size} bytes (기대값: $PACKET_SIZE) — 드롭")
+            return
+        }
+        packetCount++
+        // 매 64번째 패킷(약 1초마다)만 로그 — CH0 첫 샘플값 출력
+        if (packetCount % 64 == 0) {
+            val ch0 = bytes[0].toInt() and 0xFF
+            Log.d(TAG, "패킷 수신 #$packetCount — CH0[0]=$ch0 (0~255)")
+        }
         for (s in 0 until SAMPLES_PER_PACKET) {
             val channels = FloatArray(EMG_CHANNELS) { ch ->
                 (bytes[s * EMG_CHANNELS + ch].toInt() and 0xFF).toFloat()

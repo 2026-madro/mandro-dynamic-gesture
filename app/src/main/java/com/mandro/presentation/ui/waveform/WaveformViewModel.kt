@@ -1,5 +1,6 @@
 package com.mandro.presentation.ui.waveform
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.domain.model.BleState
@@ -12,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val TAG = "WaveformViewModel"
 
 const val DISPLAY_SAMPLES = 200
 
@@ -31,6 +34,8 @@ class WaveformViewModel @Inject constructor(
     private val _navigateToBleScan = Channel<Unit>(Channel.BUFFERED)
     val navigateToBleScan = _navigateToBleScan.receiveAsFlow()
 
+    private var sampleCount = 0
+
     // 채널별 링버퍼 — 리컴포지션 없이 Canvas가 직접 읽음
     val buffers: Array<FloatArray> = Array(EMG_CHANNELS) { FloatArray(DISPLAY_SAMPLES) }
     private val writeIndex = IntArray(EMG_CHANNELS) { 0 }
@@ -43,6 +48,7 @@ class WaveformViewModel @Inject constructor(
     private fun observeBleState() {
         viewModelScope.launch {
             bleRepository.bleState.collect { state ->
+                Log.d(TAG, "BLE 상태 변경: $state")
                 _uiState.value = _uiState.value.copy(bleState = state)
                 if (state is BleState.Disconnected) {
                     _navigateToBleScan.send(Unit)
@@ -54,6 +60,14 @@ class WaveformViewModel @Inject constructor(
     private fun collectEmgStream() {
         viewModelScope.launch {
             bleRepository.emgStream.collect { sample ->
+                sampleCount++
+                // 첫 샘플 수신 확인 + 이후 매 1280번째(약 1초)마다 로그
+                if (sampleCount == 1) {
+                    Log.i(TAG, "EMG 스트림 첫 샘플 수신 — CH0=${sample.channels[0]}")
+                } else if (sampleCount % 1280 == 0) {
+                    val avg = sample.channels.average()
+                    Log.d(TAG, "EMG 수신 중 — 누적 ${sampleCount}샘플, 현재 채널 평균=%.1f".format(avg))
+                }
                 pushSample(sample.channels)
             }
         }
