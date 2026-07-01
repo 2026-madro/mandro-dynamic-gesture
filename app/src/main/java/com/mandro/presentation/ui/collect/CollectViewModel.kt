@@ -2,7 +2,10 @@ package com.mandro.presentation.ui.collect
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mandro.core.calibration.RestCalibration
+import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.GestureSet
+import com.mandro.domain.repository.BleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,13 +40,41 @@ data class CollectUiState(
 }
 
 @HiltViewModel
-class CollectViewModel @Inject constructor() : ViewModel() {
+class CollectViewModel @Inject constructor(
+    private val bleRepository: BleRepository,
+    private val restCalibration: RestCalibration,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CollectUiState())
     val uiState = _uiState.asStateFlow()
 
+    // Canvas가 매 프레임 직접 읽는 채널별 진폭 (0~1, peak with decay)
+    @Volatile var channelAmplitudes: FloatArray = FloatArray(EMG_CHANNELS)
+        private set
+
     init {
         startCountdown()
+        collectSignalStrength()
+    }
+
+    private fun collectSignalStrength() {
+        viewModelScope.launch {
+            bleRepository.emgStream.collect { sample ->
+                // baseline이 있으면 뺀 값, 없으면 raw — 이후 수축 가능 최대범위(255-baseline)로 정규화
+                val prev = channelAmplitudes
+                channelAmplitudes = FloatArray(EMG_CHANNELS) { ch ->
+                    val raw = sample.channels[ch]
+                    val normalized = if (restCalibration.isCalibrated) {
+                        val baseline = restCalibration.baseline[ch]
+                        val maxRange = (255f - baseline).coerceAtLeast(1f)
+                        ((raw - baseline) / maxRange).coerceIn(0f, 1f)
+                    } else {
+                        (raw / 255f).coerceIn(0f, 1f)
+                    }
+                    maxOf(normalized, prev[ch] * 0.992f)
+                }
+            }
+        }
     }
 
     fun onStartTrainingEarly() {

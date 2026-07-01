@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -21,10 +22,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,11 +44,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mandro.BuildConfig
+import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.GestureSet
 import com.mandro.presentation.components.MandroPrimaryButton
 import com.mandro.presentation.components.MandroSecondaryButton
 import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
+import kotlinx.coroutines.android.awaitFrame
 
 @Composable
 fun CollectScreen(
@@ -52,6 +66,7 @@ fun CollectScreen(
 
     CollectContent(
         uiState = uiState,
+        getAmplitudes = { viewModel.channelAmplitudes },
         onStartTrainingEarly = viewModel::onStartTrainingEarly,
         onDebugSkip = viewModel::onDebugSkip,
     )
@@ -60,6 +75,7 @@ fun CollectScreen(
 @Composable
 private fun CollectContent(
     uiState: CollectUiState,
+    getAmplitudes: () -> FloatArray = { FloatArray(EMG_CHANNELS) },
     onStartTrainingEarly: () -> Unit = {},
     onDebugSkip: () -> Unit = {},
 ) {
@@ -157,7 +173,7 @@ private fun CollectContent(
             ) { phase ->
                 when (phase) {
                     is CollectPhase.Countdown -> CountdownCircle(count = phase.count)
-                    is CollectPhase.Recording -> RecordingAnimation()
+                    is CollectPhase.Recording -> SignalStrengthBars(getAmplitudes = getAmplitudes)
                 }
             }
         }
@@ -304,23 +320,76 @@ private fun CountdownCircle(count: Int) {
 }
 
 @Composable
-private fun RecordingAnimation() {
-    // TODO: Lottie 파일 준비 후 아래 Box를 LottieAnimation으로 교체
-    // val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(lottieRes))
-    // val progress by animateLottieCompositionAsState(composition, iterations = LottieConstants.IterateForever)
-    // LottieAnimation(composition, { progress }, modifier = Modifier.fillMaxWidth().height(200.dp))
+private fun SignalStrengthBars(
+    getAmplitudes: () -> FloatArray,
+) {
+    var frameCount by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            awaitFrame()
+            frameCount++
+        }
+    }
+
+    val textMeasurer = rememberTextMeasurer()
+    val colors = MandroPalette.waveColors
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
-            .background(MandroPalette.Neutral100, RoundedCornerShape(16.dp)),
-        contentAlignment = Alignment.Center,
+            .background(MandroPalette.DarkBg, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Text(
-            text = "동작 일러스트",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MandroPalette.Neutral300,
-        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            @Suppress("UNUSED_EXPRESSION")
+            frameCount
+
+            val amplitudes = getAmplitudes()
+            val totalWidth = size.width
+            val totalHeight = size.height
+            val labelHeightPx = 28f
+            val barAreaHeight = totalHeight - labelHeightPx
+            val barWidth = (totalWidth / EMG_CHANNELS) * 0.55f
+            val barSpacing = totalWidth / EMG_CHANNELS
+
+            for (ch in 0 until EMG_CHANNELS) {
+                val amp = amplitudes.getOrElse(ch) { 0f }.coerceIn(0f, 1f)
+                val barHeight = (barAreaHeight * amp).coerceAtLeast(2f)
+                val left = ch * barSpacing + (barSpacing - barWidth) / 2f
+                val top = barAreaHeight - barHeight
+                val color = colors.getOrElse(ch) { Color.White }
+
+                // 바 본체
+                drawRoundRect(
+                    color = color.copy(alpha = 0.85f),
+                    topLeft = Offset(left, top),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(4f, 4f),
+                )
+
+                // 바닥 기준선
+                drawLine(
+                    color = color.copy(alpha = 0.25f),
+                    start = Offset(left, barAreaHeight),
+                    end = Offset(left + barWidth, barAreaHeight),
+                    strokeWidth = 1f,
+                )
+
+                // 채널 라벨
+                val label = textMeasurer.measure(
+                    text = "CH$ch",
+                    style = TextStyle(fontSize = 8.sp, color = color.copy(alpha = 0.7f)),
+                )
+                drawText(
+                    textLayoutResult = label,
+                    topLeft = Offset(
+                        x = left + barWidth / 2f - label.size.width / 2f,
+                        y = barAreaHeight + 6f,
+                    ),
+                )
+            }
+        }
     }
 }
 

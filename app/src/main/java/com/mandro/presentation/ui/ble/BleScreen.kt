@@ -196,7 +196,7 @@ private fun BleContent(
                         .height(280.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    PulsingCircle(isActive = isScanning || connectingDevice != null)
+                    PulsingCircle(isScanning = isScanning, isConnecting = connectingDevice != null)
                 }
                 Spacer(Modifier.height(32.dp))
             }
@@ -240,7 +240,8 @@ private fun BleContent(
 }
 
 @Composable
-private fun PulsingCircle(isActive: Boolean) {
+private fun PulsingCircle(isScanning: Boolean, isConnecting: Boolean) {
+    val isActive = isScanning || isConnecting
     // 3개의 파동이 순차적으로 퍼져나감
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
 
@@ -303,7 +304,11 @@ private fun PulsingCircle(isActive: Boolean) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = if (isActive) "찾는 중..." else "대기 중",
+                text = when {
+                    isConnecting -> "연결 중..."
+                    isScanning -> "찾는 중..."
+                    else -> "대기 중"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MandroPalette.Primary600,
             )
