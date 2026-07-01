@@ -1,5 +1,9 @@
 package com.mandro.presentation.ui.ble
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -24,6 +28,15 @@ import com.mandro.domain.model.BleState
 import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
 
+private val BLE_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+    )
+} else {
+    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+}
+
 @Composable
 fun BleScreen(
     viewModel: BleViewModel = hiltViewModel(),
@@ -32,16 +45,91 @@ fun BleScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    var permissionDenied by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.all { it }) {
+            permissionDenied = false
+            viewModel.onRescan()
+        } else {
+            permissionDenied = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        permissionLauncher.launch(BLE_PERMISSIONS)
+    }
+
     LaunchedEffect(uiState.bleState) {
         if (uiState.bleState is BleState.Connected) onConnected()
     }
 
-    BleContent(
-        uiState = uiState,
-        onBack = onBack,
-        onConnectClick = viewModel::onConnectClick,
-        onRescan = viewModel::onRescan,
-    )
+    if (permissionDenied) {
+        PermissionDeniedContent(
+            onBack = onBack,
+            onRetry = { permissionLauncher.launch(BLE_PERMISSIONS) },
+        )
+    } else {
+        BleContent(
+            uiState = uiState,
+            onBack = onBack,
+            onConnectClick = viewModel::onConnectClick,
+            onRescan = viewModel::onRescan,
+        )
+    }
+}
+
+@Composable
+private fun PermissionDeniedContent(
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    Scaffold(
+        containerColor = MandroPalette.Neutral50,
+        topBar = {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "뒤로",
+                    tint = MandroPalette.Neutral700,
+                )
+            }
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = "암밴드 연결 권한이 필요해요",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MandroPalette.Neutral900,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "블루투스 권한을 허용해야 암밴드와 연결할 수 있어요.\n설정에서 권한을 허용한 뒤 다시 시도해 주세요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MandroPalette.Neutral500,
+            )
+            Spacer(Modifier.height(32.dp))
+            Button(
+                onClick = onRetry,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MandroPalette.Primary600),
+            ) {
+                Text("권한 다시 요청", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
 }
 
 @Composable
