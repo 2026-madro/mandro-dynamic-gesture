@@ -4,64 +4,57 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
+import com.mandro.domain.repository.BleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.sin
-import kotlin.random.Random
 
-// 화면에 표시할 샘플 수 (버퍼 크기)
-// TODO: 실제 BLE 샘플링 주파수(1200Hz)와 UI 갱신 주기(60fps)에 맞게 조정 필요
 const val DISPLAY_SAMPLES = 200
 
 data class WaveformUiState(
     val bleState: BleState = BleState.Disconnected,
     val visibleChannels: BooleanArray = BooleanArray(EMG_CHANNELS) { true },
-    // TODO: 채널 수 4/6/8 전환 지원 시 activeChannels: Int = EMG_CHANNELS 추가
 )
 
 @HiltViewModel
 class WaveformViewModel @Inject constructor(
-    // TODO: BleRepository 주입 후 실제 emgStream 구독으로 교체
-    // private val bleRepository: BleRepository,
+    private val bleRepository: BleRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WaveformUiState())
     val uiState = _uiState.asStateFlow()
+
+    private val _navigateToBleScan = Channel<Unit>(Channel.BUFFERED)
+    val navigateToBleScan = _navigateToBleScan.receiveAsFlow()
 
     // 채널별 링버퍼 — 리컴포지션 없이 Canvas가 직접 읽음
     val buffers: Array<FloatArray> = Array(EMG_CHANNELS) { FloatArray(DISPLAY_SAMPLES) }
     private val writeIndex = IntArray(EMG_CHANNELS) { 0 }
 
     init {
-        startFakeStream()
+        observeBleState()
+        collectEmgStream()
     }
 
-    // TODO: 실제 BLE 연결 후 아래 함수를 BleRepository.emgStream 구독으로 교체
-    // fun startRealStream() {
-    //     viewModelScope.launch {
-    //         bleRepository.emgStream.collect { sample ->
-    //             if (!_uiState.value.isPaused) pushSample(sample.channels)
-    //         }
-    //     }
-    // }
-
-    private fun startFakeStream() {
+    private fun observeBleState() {
         viewModelScope.launch {
-            var t = 0.0
-            while (true) {
-                // 채널마다 주파수/위상이 다른 사인파 + 노이즈
-                val sample = FloatArray(EMG_CHANNELS) { ch ->
-                    val freq = 0.05 + ch * 0.015
-                    val noise = (Random.nextFloat() - 0.5f) * 2000f
-                    (sin(t * freq + ch) * 10000f + noise).toFloat()
+            bleRepository.bleState.collect { state ->
+                _uiState.value = _uiState.value.copy(bleState = state)
+                if (state is BleState.Disconnected) {
+                    _navigateToBleScan.send(Unit)
                 }
-                pushSample(sample)
-                t += 1.0
-                delay(8L) // ~120fps 입력 시뮬레이션
+            }
+        }
+    }
+
+    private fun collectEmgStream() {
+        viewModelScope.launch {
+            bleRepository.emgStream.collect { sample ->
+                pushSample(sample.channels)
             }
         }
     }

@@ -35,8 +35,13 @@ import kotlin.math.sin
 @Composable
 fun WaveformScreen(
     viewModel: WaveformViewModel = hiltViewModel(),
+    onDisconnected: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToBleScan.collect { onDisconnected() }
+    }
 
     WaveformContent(
         uiState = uiState,
@@ -181,16 +186,16 @@ private fun DrawScope.drawWaveform(
     val midY = h / 2f
     val n = buffer.size
 
-    // int16 범위(-32768~32767)를 화면 높이의 ±45%로 정규화
-    // TODO: 실제 펌웨어 출력 범위에 맞게 scale 조정 필요
-    val scale = (h * 0.45f) / 32768f
+    // uint8 범위(0~255), 중앙값 127.5 기준으로 화면 높이 ±45%에 정규화
+    val midOffset = 127.5f
+    val scale = (h * 0.45f) / 127.5f
 
     val path = Path()
     var started = false
 
     for (i in 0 until n) {
         val x = (i.toFloat() / (n - 1)) * w
-        val y = midY - buffer[i] * scale
+        val y = midY - (buffer[i] - midOffset) * scale
 
         if (!started) {
             path.moveTo(x, y)

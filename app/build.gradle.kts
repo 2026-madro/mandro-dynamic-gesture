@@ -23,9 +23,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            buildConfigField("Boolean", "USE_MOCK_BLE", "false")
+            buildConfigField("String", "BASE_URL", "\"https://api.mandro.com/\"") // 예시 운영 서버 주소
         }
         debug {
             buildConfigField("String", "BASE_URL", "\"http://127.0.0.1:8000/\"") // adb reverse로 PC localhost 터널링
+            buildConfigField("Boolean", "USE_MOCK_BLE", "true")
         }
     }
 

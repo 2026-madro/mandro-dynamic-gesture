@@ -2,11 +2,10 @@ package com.mandro.presentation.ui.ble
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mandro.BuildConfig
 import com.mandro.domain.model.BleDevice
 import com.mandro.domain.model.BleState
+import com.mandro.domain.repository.BleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -20,34 +19,31 @@ data class BleUiState(
 )
 
 @HiltViewModel
-class BleViewModel @Inject constructor() : ViewModel() {
+class BleViewModel @Inject constructor(
+    private val bleRepository: BleRepository,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BleUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
-        if (BuildConfig.DEBUG) {
-            viewModelScope.launch {
-                delay(3000L)
-                _uiState.update {
-                    it.copy(
-                        bleState = BleState.DevicesFound(
-                            listOf(
-                                BleDevice("EMG-Sensor-A4F2", "00:11:22:33:44:55", -55),
-                                BleDevice("EMG-Sensor-B3C1", "00:11:22:33:44:66", -82),
-                            )
-                        )
-                    )
-                }
+        observeBleState()
+        viewModelScope.launch { bleRepository.startScan() }
+    }
+
+    private fun observeBleState() {
+        viewModelScope.launch {
+            bleRepository.bleState.collect { state ->
+                _uiState.update { it.copy(bleState = state, error = null) }
             }
         }
     }
 
     fun onConnectClick(device: BleDevice) {
-        _uiState.update { it.copy(bleState = BleState.Connecting(device)) }
+        viewModelScope.launch { bleRepository.connect(device) }
     }
 
     fun onRescan() {
-        _uiState.update { it.copy(bleState = BleState.Scanning) }
+        viewModelScope.launch { bleRepository.startScan() }
     }
 }

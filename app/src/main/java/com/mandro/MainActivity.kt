@@ -144,7 +144,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.Waveform.route) {
-                            WaveformScreen()
+                            WaveformScreen(
+                                onDisconnected = {
+                                    navController.navigate(Screen.BleScan.route) {
+                                        popUpTo(Screen.BleScan.route) { inclusive = true }
+                                    }
+                                },
+                            )
                         }
                         composable(Screen.Training.route) {
                             GuideScreen(

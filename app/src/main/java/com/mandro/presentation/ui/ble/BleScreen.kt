@@ -32,13 +32,14 @@ fun BleScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(uiState.bleState) {
+        if (uiState.bleState is BleState.Connected) onConnected()
+    }
+
     BleContent(
         uiState = uiState,
         onBack = onBack,
-        onConnectClick = {
-            viewModel.onConnectClick(it)
-            onConnected()
-        },
+        onConnectClick = viewModel::onConnectClick,
         onRescan = viewModel::onRescan,
     )
 }
