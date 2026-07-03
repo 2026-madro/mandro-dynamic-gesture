@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,15 +36,19 @@ import com.mandro.presentation.theme.MandroTheme
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onUserClick: (User) -> Unit = {},
+    onUserSelected: () -> Unit = {},
     onAddUser: () -> Unit = {},
     onConnectBand: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) {
+        viewModel.navigateToMain.collect { onUserSelected() }
+    }
+
     HomeContent(
         uiState = uiState,
-        onUserClick = onUserClick,
+        onUserClick = viewModel::onUserSelected,
         onAddUser = onAddUser,
         onConnectBand = onConnectBand,
     )

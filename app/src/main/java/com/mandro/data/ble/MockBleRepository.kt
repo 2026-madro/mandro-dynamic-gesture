@@ -4,6 +4,7 @@ import com.mandro.domain.model.BleDevice
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.EmgSample
+import com.mandro.domain.model.InferenceResult
 import com.mandro.domain.repository.BleRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,9 @@ class MockBleRepository @Inject constructor() : BleRepository {
         extraBufferCapacity = 512,
     )
     override val emgStream: Flow<EmgSample> = _emgStream.asSharedFlow()
+
+    private val _inferenceStream = MutableSharedFlow<InferenceResult>(replay = 1)
+    override val inferenceStream: Flow<InferenceResult> = _inferenceStream.asSharedFlow()
 
     private val mockDevices = listOf(
         BleDevice("ESP32S3_FAST_BLE", "00:11:22:33:44:55", -55),
@@ -78,6 +82,18 @@ class MockBleRepository @Inject constructor() : BleRepository {
                 }
                 t += 20.0
                 delay(15L) // ~64Hz
+            }
+        }
+
+        // 20Hz 추론 결과 시뮬레이션
+        scope.launch {
+            val gestures = InferenceResult.GESTURE_NAMES
+            var i = 0
+            while (_bleState.value is BleState.Connected) {
+                val probs = FloatArray(6) { if (it == i % 6) 0.85f else 0.03f }
+                _inferenceStream.tryEmit(InferenceResult(gestures[i % 6], probs))
+                i++
+                delay(50L) // ~20Hz
             }
         }
     }

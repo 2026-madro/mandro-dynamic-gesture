@@ -67,3 +67,27 @@ data class ClassificationResult(
     val channelSignals: FloatArray,     // 현재 8채널 신호 (방사형 시각화용)
     val timestampMs: Long = System.currentTimeMillis(),
 )
+
+/**
+ * BLE Characteristic ...57 에서 수신한 추론 결과.
+ * 포맷: "classname|l0|l1|l2|l3|l4|l5"
+ */
+data class InferenceResult(
+    val className: String,
+    val probabilities: FloatArray,      // size = 6, softmax 확률
+) {
+    val confidence: Float get() = probabilities.maxOrNull() ?: 0f
+
+    companion object {
+        val GESTURE_NAMES = listOf("rest", "flexion", "extension", "close", "supination", "pronation")
+
+        fun parse(bytes: ByteArray): InferenceResult? = runCatching {
+            val parts = String(bytes, Charsets.UTF_8).split("|")
+            if (parts.size != 7) return null
+            InferenceResult(
+                className = parts[0],
+                probabilities = FloatArray(6) { i -> parts[i + 1].toFloat() },
+            )
+        }.getOrNull()
+    }
+}

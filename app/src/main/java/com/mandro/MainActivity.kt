@@ -121,6 +121,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.Home.route) {
                             HomeScreen(
+                                onUserSelected = {
+                                    navController.navigate(Screen.BleScan.route)
+                                },
                                 onAddUser = {
                                     navController.navigate(Screen.UserCreate.route)
                                 },

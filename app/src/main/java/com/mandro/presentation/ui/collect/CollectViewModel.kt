@@ -3,9 +3,14 @@ package com.mandro.presentation.ui.collect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.core.calibration.RestCalibration
+import com.mandro.data.local.UserPreferences
 import com.mandro.domain.model.EMG_CHANNELS
+import com.mandro.domain.model.EmgWindow
 import com.mandro.domain.model.GestureSet
+import com.mandro.domain.model.RecordingTake
+import com.mandro.domain.model.WINDOW_SIZE
 import com.mandro.domain.repository.BleRepository
+import com.mandro.domain.repository.EmgRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,25 +47,30 @@ data class CollectUiState(
 @HiltViewModel
 class CollectViewModel @Inject constructor(
     private val bleRepository: BleRepository,
+    private val emgRepository: EmgRepository,
+    private val userPreferences: UserPreferences,
     private val restCalibration: RestCalibration,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CollectUiState())
     val uiState = _uiState.asStateFlow()
 
-    // Canvas가 매 프레임 직접 읽는 채널별 진폭 (0~1, peak with decay)
     @Volatile var channelAmplitudes: FloatArray = FloatArray(EMG_CHANNELS)
         private set
 
+    // 녹화 중 raw 샘플 버퍼 (캘리브레이션 적용 전 원본값)
+    @Volatile private var isRecording = false
+    private val recordingBuffer = mutableListOf<FloatArray>()
+
     init {
         startCountdown()
-        collectSignalStrength()
+        collectEmgStream()
     }
 
-    private fun collectSignalStrength() {
+    private fun collectEmgStream() {
         viewModelScope.launch {
             bleRepository.emgStream.collect { sample ->
-                // baseline이 있으면 뺀 값, 없으면 raw — 이후 수축 가능 최대범위(255-baseline)로 정규화
+                // ── 신호 세기 바 업데이트 ──────────────────────────────
                 val prev = channelAmplitudes
                 channelAmplitudes = FloatArray(EMG_CHANNELS) { ch ->
                     val raw = sample.channels[ch]
@@ -72,6 +82,13 @@ class CollectViewModel @Inject constructor(
                         (raw / 255f).coerceIn(0f, 1f)
                     }
                     maxOf(normalized, prev[ch] * 0.992f)
+                }
+
+                // ── 녹화 버퍼에 raw 샘플 적재 ─────────────────────────
+                if (isRecording) {
+                    synchronized(recordingBuffer) {
+                        recordingBuffer.add(sample.channels.copyOf())
+                    }
                 }
             }
         }
@@ -91,26 +108,47 @@ class CollectViewModel @Inject constructor(
                 _uiState.update { it.copy(phase = CollectPhase.Countdown(count)) }
                 delay(COUNTDOWN_STEP_MS)
             }
+
+            // 녹화 시작
+            synchronized(recordingBuffer) { recordingBuffer.clear() }
+            isRecording = true
             _uiState.update { it.copy(phase = CollectPhase.Recording, recordingSecondsLeft = RECORD_SECONDS) }
-            // TODO: 랩 완료 후 수집된 EMG 데이터 그래프 시각화 (데스크탑 앱의 랩별 신호 확인 기능)
+
             for (secondsLeft in RECORD_SECONDS - 1 downTo 0) {
                 delay(COUNTDOWN_STEP_MS)
                 _uiState.update { it.copy(recordingSecondsLeft = secondsLeft) }
             }
+
+            // 녹화 종료 → 저장
+            isRecording = false
             onGestureDone()
         }
     }
 
     private fun onGestureDone() {
         val state = _uiState.value
-        val nextGestureIndex = state.currentGestureIndex + 1
 
+        // 녹화된 샘플 → EmgWindow 리스트로 변환 후 저장
+        viewModelScope.launch {
+            val userId = userPreferences.getUserId()
+            if (userId != null) {
+                val windows = samplesToWindows(recordingBuffer.toList())
+                if (windows.isNotEmpty()) {
+                    val take = RecordingTake(
+                        gesture = state.currentGestureName,
+                        takeIndex = state.currentLap - 1,
+                        windows = windows,
+                    )
+                    emgRepository.saveTake(userId, take)
+                }
+            }
+        }
+
+        val nextGestureIndex = state.currentGestureIndex + 1
         if (nextGestureIndex < state.gestures.size) {
-            // 같은 랩 내 다음 동작
             _uiState.update { it.copy(currentGestureIndex = nextGestureIndex) }
             startCountdown()
         } else {
-            // 랩 완료
             val nextLap = state.currentLap + 1
             if (nextLap > TOTAL_LAPS) {
                 _uiState.update { it.copy(isDone = true) }
@@ -119,6 +157,21 @@ class CollectViewModel @Inject constructor(
                 startCountdown()
             }
         }
+    }
+
+    /**
+     * raw 샘플 리스트를 WINDOW_SIZE 단위 EmgWindow로 변환.
+     * 끝부분 나머지(< WINDOW_SIZE)는 버림.
+     */
+    private fun samplesToWindows(samples: List<FloatArray>): List<EmgWindow> {
+        val windows = mutableListOf<EmgWindow>()
+        var i = 0
+        while (i + WINDOW_SIZE <= samples.size) {
+            val data = Array(WINDOW_SIZE) { row -> samples[i + row] }
+            windows.add(EmgWindow(data = data))
+            i += WINDOW_SIZE
+        }
+        return windows
     }
 }
 

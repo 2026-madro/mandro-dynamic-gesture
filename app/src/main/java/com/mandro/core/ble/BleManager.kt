@@ -17,7 +17,8 @@ import javax.inject.Singleton
 private const val TAG = "BleManager"
 
 private const val EMG_SERVICE_UUID        = "12345678-1234-1234-1234-1234567890ab"
-private const val EMG_CHARACTERISTIC_UUID = "abcd1234-5678-1234-5678-abcdef123456"
+private const val EMG_CHARACTERISTIC_UUID = "abcd1234-5678-1234-5678-abcdef123456"  // raw EMG
+private const val INFER_CHARACTERISTIC_UUID = "abcd1234-5678-1234-5678-abcdef123457" // 추론 결과
 private const val ARMBAND_NAME            = "ESP32S3_FAST_BLE"
 private const val MTU_SIZE                = 247
 private const val SAMPLES_PER_PACKET      = 20
@@ -39,8 +40,16 @@ class BleManager @Inject constructor(
     )
     val emgStream: SharedFlow<EmgSample> = _emgStream.asSharedFlow()
 
+    private val _inferenceStream = MutableSharedFlow<com.mandro.domain.model.InferenceResult>(
+        replay = 1,
+        extraBufferCapacity = 64,
+    )
+    val inferenceStream: SharedFlow<com.mandro.domain.model.InferenceResult> = _inferenceStream.asSharedFlow()
+
     private var gatt: BluetoothGatt? = null
     private var packetCount = 0
+    // 두 Characteristic 구독을 순차적으로 처리하기 위한 플래그
+    private var emgNotifyDone = false
 
     // ── 스캔 ──────────────────────────────────────────────────
 
@@ -178,33 +187,51 @@ class BleManager @Inject constructor(
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             try {
                 Log.d(TAG, "서비스 탐색 완료 (status=$status)")
-                val characteristic = gatt
-                    .getService(java.util.UUID.fromString(EMG_SERVICE_UUID))
-                    ?.getCharacteristic(java.util.UUID.fromString(EMG_CHARACTERISTIC_UUID))
+                val service = gatt.getService(java.util.UUID.fromString(EMG_SERVICE_UUID))
                     ?: run {
-                        Log.e(TAG, "EMG 서비스/캐릭터리스틱 없음 — UUID 불일치 가능성")
+                        Log.e(TAG, "EMG 서비스 없음 — UUID 불일치 가능성")
                         _bleState.value = BleState.Error("암밴드를 찾지 못했어요. 전원을 확인하고 다시 시도해 주세요.")
                         return
                     }
 
-                gatt.setCharacteristicNotification(characteristic, true)
-                val descriptor = characteristic.descriptors.firstOrNull()
-                descriptor?.let {
-                    it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    gatt.writeDescriptor(it)
+                // raw EMG Characteristic (...56) — 먼저 구독
+                emgNotifyDone = false
+                val emgChar = service.getCharacteristic(java.util.UUID.fromString(EMG_CHARACTERISTIC_UUID))
+                if (emgChar != null) {
+                    enableNotify(gatt, emgChar)
+                } else {
+                    Log.w(TAG, "raw EMG Characteristic 없음")
+                    subscribeInferChar(gatt, service)  // EMG 없어도 추론 결과는 구독 시도
                 }
-                Log.d(TAG, "Notify 등록 완료")
+                // 추론 결과 Characteristic (...57) 구독은 onDescriptorWrite 콜백에서 순차 처리
+            } catch (e: SecurityException) {
+                _bleState.value = BleState.Error("서비스 설정 중 권한 오류가 발생했습니다.")
+            }
+        }
 
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int,
+        ) {
+            val charUuid = descriptor.characteristic.uuid.toString()
+            Log.d(TAG, "Descriptor 쓰기 완료: $charUuid (status=$status)")
+
+            if (charUuid.equals(EMG_CHARACTERISTIC_UUID, ignoreCase = true) && !emgNotifyDone) {
+                emgNotifyDone = true
+                // raw EMG 구독 완료 → 추론 결과 Characteristic 구독
+                val service = gatt.getService(java.util.UUID.fromString(EMG_SERVICE_UUID))
+                if (service != null) subscribeInferChar(gatt, service)
+
+                // 연결 완료 상태 업데이트
                 val deviceName = try { gatt.device.name } catch (e: SecurityException) { null }
                 val connectedDevice = BleDevice(
                     name = deviceName ?: ARMBAND_NAME,
                     address = gatt.device.address,
                     rssi = 0,
                 )
-                Log.i(TAG, "연결 완료: ${connectedDevice.name} (${connectedDevice.address})")
+                Log.i(TAG, "연결 완료: ${connectedDevice.name}")
                 _bleState.value = BleState.Connected(connectedDevice)
-            } catch (e: SecurityException) {
-                _bleState.value = BleState.Error("서비스 설정 중 권한 오류가 발생했습니다.")
             }
         }
 
@@ -213,11 +240,45 @@ class BleManager @Inject constructor(
             characteristic: BluetoothGattCharacteristic,
         ) {
             val bytes = characteristic.value ?: return
-            parseEmgPacket(bytes)
+            when (characteristic.uuid.toString().lowercase()) {
+                EMG_CHARACTERISTIC_UUID.lowercase()   -> parseEmgPacket(bytes)
+                INFER_CHARACTERISTIC_UUID.lowercase() -> parseInferencePacket(bytes)
+            }
+        }
+    }
+
+    private fun enableNotify(gatt: BluetoothGatt, char: BluetoothGattCharacteristic) {
+        try {
+            gatt.setCharacteristicNotification(char, true)
+            char.descriptors.firstOrNull()?.let { desc ->
+                desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                gatt.writeDescriptor(desc)
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Notify 등록 실패: ${char.uuid}", e)
+        }
+    }
+
+    private fun subscribeInferChar(gatt: BluetoothGatt, service: android.bluetooth.BluetoothGattService) {
+        val inferChar = service.getCharacteristic(java.util.UUID.fromString(INFER_CHARACTERISTIC_UUID))
+        if (inferChar != null) {
+            enableNotify(gatt, inferChar)
+            Log.d(TAG, "추론 결과 Characteristic 구독 요청")
+        } else {
+            Log.w(TAG, "추론 결과 Characteristic 없음 (펌웨어 미지원 가능성)")
         }
     }
 
     // ── 패킷 파싱 ─────────────────────────────────────────────
+
+    /** 포맷: "classname|l0|l1|l2|l3|l4|l5" */
+    private fun parseInferencePacket(bytes: ByteArray) {
+        val result = com.mandro.domain.model.InferenceResult.parse(bytes) ?: run {
+            Log.w(TAG, "추론 결과 파싱 실패: ${String(bytes, Charsets.UTF_8)}")
+            return
+        }
+        _inferenceStream.tryEmit(result)
+    }
 
     /**
      * 패킷 포맷: uint8 × 8채널 × 20샘플 = 160 bytes (row-major)

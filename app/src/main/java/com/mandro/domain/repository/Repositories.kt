@@ -32,6 +32,7 @@ interface EmgRepository {
 interface BleRepository {
     val bleState: Flow<BleState>
     val emgStream: Flow<EmgSample>
+    val inferenceStream: Flow<InferenceResult>  // BLE Characteristic ...57
 
     suspend fun startScan()
     suspend fun stopScan()
@@ -54,11 +55,3 @@ sealed class TrainingProgress {
     data class Failed(val message: String) : TrainingProgress()
 }
 
-// USB 상태
-sealed class UsbState {
-    object Disconnected : UsbState()
-    object DeviceDetected : UsbState()
-    data class Flashing(val percent: Int) : UsbState()
-    object Done : UsbState()
-    data class Error(val message: String) : UsbState()
-}

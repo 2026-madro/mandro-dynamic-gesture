@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,13 +29,17 @@ fun UserScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) {
+        viewModel.navigateNext.collect { onStart() }
+    }
+
     UserContent(
         uiState = uiState,
         onBack = onBack,
         onNameChange = viewModel::onNameChange,
         onConsentPrivacyChange = viewModel::onConsentPrivacyChange,
         onConsentResearchChange = viewModel::onConsentResearchChange,
-        onStart = onStart,
+        onStart = viewModel::onStartClick,
     )
 }
 

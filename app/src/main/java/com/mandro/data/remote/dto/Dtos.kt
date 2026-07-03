@@ -2,43 +2,44 @@ package com.mandro.data.remote.dto
 
 import com.google.gson.annotations.SerializedName
 
+// ── Users ──────────────────────────────────────────────────────
+
 data class CreateUserRequest(
     @SerializedName("name") val name: String,
-    @SerializedName("research_consent") val researchConsent: Boolean,
+    @SerializedName("consent_required") val consentRequired: Boolean,
+    @SerializedName("consent_research") val consentResearch: Boolean = false,
 )
 
 data class UserResponse(
     @SerializedName("id") val id: String,
     @SerializedName("name") val name: String,
-    @SerializedName("research_consent") val researchConsent: Boolean,
-    @SerializedName("created_at") val createdAt: Long,
+    @SerializedName("consent_required") val consentRequired: Boolean,
+    @SerializedName("consent_research") val consentResearch: Boolean,
+    @SerializedName("created_at") val createdAt: String,
 )
 
-data class UploadResponse(
-    @SerializedName("session_id") val sessionId: String,
-    @SerializedName("file_count") val fileCount: Int,
-)
+// ── Sessions ───────────────────────────────────────────────────
 
-data class TrainRequest(
-    @SerializedName("session_id") val sessionId: String,
-    @SerializedName("gesture_set") val gestureSet: String,
-)
-
-data class TrainResponse(
-    @SerializedName("job_id") val jobId: String,
-    @SerializedName("status") val status: String,
+data class SessionResponse(
+    @SerializedName("id") val id: String,
+    @SerializedName("user_id") val userId: String,
+    @SerializedName("lap_count") val lapCount: Int,
+    @SerializedName("status") val status: String,   // idle|queued|training|done|failed
+    @SerializedName("progress") val progress: Int,  // 0~100
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("trained_at") val trainedAt: String?,
 )
 
 data class TrainingStatusResponse(
-    @SerializedName("status") val status: String,          // "checking" | "building" | "analyzing" | "finalizing" | "done" | "failed"
-    @SerializedName("progress") val progress: Int?,        // 0 ~ 100
-    @SerializedName("accuracy") val accuracy: Float?,
-    @SerializedName("error") val error: String?,
+    @SerializedName("session_id") val sessionId: String,
+    @SerializedName("status") val status: String,
+    @SerializedName("progress") val progress: Int,
 )
 
-data class ModelResponse(
-    @SerializedName("model_base64") val modelBase64: String,
-    @SerializedName("scaler_base64") val scalerBase64: String,
-    @SerializedName("accuracy") val accuracy: Float,
-    @SerializedName("gesture_set") val gestureSet: String,
+// ── Scaler ─────────────────────────────────────────────────────
+
+data class ScalerResponse(
+    @SerializedName("mean") val mean: List<Float>,
+    @SerializedName("std") val std: List<Float>,
+    @SerializedName("gestures") val gestures: List<String>,
 )
