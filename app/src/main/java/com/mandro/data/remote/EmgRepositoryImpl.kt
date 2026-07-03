@@ -2,7 +2,10 @@ package com.mandro.data.remote
 
 import android.content.Context
 import android.util.Log
+import com.mandro.data.local.db.RecordingTakeDao
+import com.mandro.data.local.db.RecordingTakeEntity
 import com.mandro.data.remote.api.MandrApiService
+import com.mandro.data.remote.dto.ScalerResponse
 import com.mandro.domain.model.*
 import com.mandro.domain.repository.EmgRepository
 import com.mandro.domain.repository.TrainingProgress
@@ -34,18 +37,18 @@ private val GESTURE_INDEX = mapOf(
 class EmgRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val api: MandrApiService,
+    private val takeDao: RecordingTakeDao,
 ) : EmgRepository {
 
-    // 간단한 인메모리 버퍼 (Room 연동 전 임시)
-    private val takeBuffer = mutableMapOf<String, MutableList<RecordingTake>>()
-
     override suspend fun saveTake(userId: String, take: RecordingTake) {
-        takeBuffer.getOrPut(userId) { mutableListOf() }.add(take)
+        takeDao.insert(RecordingTakeEntity.fromDomain(userId, take))
+        Log.d(TAG, "take 저장: userId=$userId gesture=${take.gesture} windows=${take.windows.size}")
     }
 
     override suspend fun getBatch(userId: String): RecordingBatch? {
-        val takes = takeBuffer[userId] ?: return null
-        if (takes.isEmpty()) return null
+        val entities = takeDao.getByUserId(userId)
+        if (entities.isEmpty()) return null
+        val takes = entities.map { it.toDomain() }
         return RecordingBatch(
             userId = userId,
             gestureSet = GestureSet.SIX_CLASS,
@@ -54,7 +57,8 @@ class EmgRepositoryImpl @Inject constructor(
     }
 
     override suspend fun clearBatch(userId: String) {
-        takeBuffer.remove(userId)
+        takeDao.deleteByUserId(userId)
+        Log.d(TAG, "배치 초기화: userId=$userId")
     }
 
     override suspend fun uploadAndTrain(
