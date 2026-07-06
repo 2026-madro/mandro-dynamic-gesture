@@ -26,42 +26,19 @@ private const val PACKET_SIZE             = SAMPLES_PER_PACKET * EMG_CHANNELS  /
 
 @Singleton
 class BleManager @Inject constructor(
-    @ApplicationContext private val context: Context, // [질문] 이 컨텍스트 클래스가 뭔지? 안드로이드 단에 있는 기능 같긴 한데
-    // [답변] 맞음. Context는 안드로이드 프레임워크가 제공하는 "현재 앱/컴포넌트의 실행 환경"에 대한 핸들.
-    // 시스템 서비스(블루투스, 위치 등)에 접근하거나, 리소스를 읽거나, 다른 컴포넌트를 실행할 때 항상 필요함.
-    // 여기서는 @ApplicationContext로 Hilt가 "Activity가 아니라 앱 전체 생명주기를 따르는 Context"를 주입해줌
-    // (BleManager는 Singleton이라 특정 Activity에 묶이면 메모리 누수가 나기 때문).
+    @ApplicationContext private val context: Context,
 ) {
     private val adapter: BluetoothAdapter? =
-        // context라는 클래스에서 getSystemService 함수를 사용 , 그리고 Context 클래스에 선언된 블루투스 서비스라는 변수 주입? adapter는 뭘까..
-        // [답변] getSystemService(BLUETOOTH_SERVICE)는 안드로이드 시스템이 관리하는 BluetoothManager 객체를 돌려주는 함수.
-        // "블루투스 서비스라는 변수 주입"이라기보다, 시스템에 미리 떠 있는 매니저 인스턴스를 얻어오는 것에 가까움 (as?는 타입 캐스팅 실패 시 null).
-        // BluetoothManager.adapter가 바로 이 기기의 블루투스 하드웨어를 제어하는 진입점인 BluetoothAdapter.
-        // 즉 스캔 시작/중지, 페어링된 기기 조회, GATT 연결 시작(connectGatt) 등이 전부 이 adapter를 통해 이뤄짐.
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
-    // 뷰모델과 ui 의 역할을 분리하기 위해 이 구조를 많이 사용하는 것 같긴 한데 정확히 MutableStateFlow가 어떤 역할인지?
-    // [답변] 맞는 방향. MutableStateFlow는 "현재 값 하나를 항상 들고 있는 관찰 가능한 컨테이너".
-    // 값이 바뀌면 구독하고 있는 모든 곳(ViewModel, Compose UI)에 자동으로 새 값을 흘려보냄.
-    // private _bleState(쓰기 가능)는 BleManager 내부에서만 값을 바꾸고,
-    // 바로 아래 공개된 bleState(읽기 전용 StateFlow)는 밖에서 구독만 하게 해서 캡슐화함
-    // (외부에서 상태를 함부로 덮어쓰지 못하게 막는 패턴 — backing property 패턴).
-    private val _bleState = MutableStateFlow<BleState>(BleState.Disconnected) // Blestate가 블루투스의 연결 상태를 나타내는 건 알겠는데, 그 원리가 뭔지, 왜 Blestate라는 클래스에서는 disconnected에서 자기 스스로를 또 호출하는 거자ㅣ?
-    // [답변] 자기 자신을 호출하는 게 아니라 상속 구조임. BleState는 sealed class이고,
-    // Disconnected/Scanning/Connected 등은 그 sealed class를 상속하는 하위 타입들 (domain/model/BleDevice.kt 참고).
-    // "BleState()"는 함수 호출이 아니라 부모 클래스의 생성자를 호출하는 상속 문법 (Kotlin의 `: BleState()`).
-    // 그래서 BleState 타입 변수 하나로 "연결 안 됨/스캔 중/연결됨/에러" 등 서로 다른 케이스를 안전하게 표현할 수 있고,
-    // when문에서 이 케이스들을 강제로 다 분기 처리하게 만들 수 있음 (enum보다 각 상태가 자기만의 데이터를 가질 수 있어 더 강력함).
-    val bleState: StateFlow<BleState> = _bleState.asStateFlow()
+    private val _bleState = MutableStateFlow<BleState>(BleState.Disconnected)
 
-    // emg에서 데이터 받아오는 변수?
+    val bleState: StateFlow<BleState> = _bleState.asStateFlow()
     private val _emgStream = MutableSharedFlow<EmgSample>(
         replay = 0,
         extraBufferCapacity = 512,
     )
     val emgStream: SharedFlow<EmgSample> = _emgStream.asSharedFlow()
-
-    // 얘는 추론 결과 받아오는 변수일 거고
     private val _inferenceStream = MutableSharedFlow<com.mandro.domain.model.InferenceResult>(
         replay = 1,
         extraBufferCapacity = 64,
