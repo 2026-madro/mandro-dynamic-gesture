@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,12 +47,26 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         viewModel.navigateToMain.collect { onUserSelected() }
     }
+    LaunchedEffect(Unit) {
+        viewModel.navigateToBleScan.collect { onConnectBand() }
+    }
+
+    if (uiState.error != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::onErrorDismissed,
+            title = { Text("유저 선택 필요") },
+            text = { Text(uiState.error!!) },
+            confirmButton = {
+                TextButton(onClick = viewModel::onErrorDismissed) { Text("확인") }
+            },
+        )
+    }
 
     HomeContent(
         uiState = uiState,
         onUserClick = viewModel::onUserSelected,
         onAddUser = onAddUser,
-        onConnectBand = onConnectBand,
+        onConnectBand = viewModel::onConnectBand,
     )
 }
 
