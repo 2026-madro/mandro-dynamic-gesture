@@ -28,8 +28,10 @@ class RestCalibration @Inject constructor() {
 
     fun apply(channels: FloatArray): FloatArray {
         if (!isCalibrated) return channels
+        // 기준선 아래로 내려가는 값도 그대로 음수로 남겨서, 그래프가 중심선 기준
+        // 양방향으로 그려지도록 함 (0에서 클램프하면 한쪽으로만 튀는 모양이 됨)
         return FloatArray(EMG_CHANNELS) { ch ->
-            (channels[ch] - (baseline[ch] - MARGIN).coerceAtLeast(0f)).coerceAtLeast(0f)
+            channels[ch] - (baseline[ch] - MARGIN).coerceAtLeast(0f)
         }
     }
 

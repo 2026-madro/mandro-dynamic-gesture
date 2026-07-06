@@ -32,8 +32,8 @@ class BleManager @Inject constructor(
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
     private val _bleState = MutableStateFlow<BleState>(BleState.Disconnected)
-
     val bleState: StateFlow<BleState> = _bleState.asStateFlow()
+
     private val _emgStream = MutableSharedFlow<EmgSample>(
         replay = 0,
         extraBufferCapacity = 512,
@@ -147,7 +147,7 @@ class BleManager @Inject constructor(
             gatt?.disconnect()
             gatt?.close()
         } catch (e: SecurityException) {
-            // 무시
+
         }
         gatt = null
         _bleState.value = BleState.Disconnected
