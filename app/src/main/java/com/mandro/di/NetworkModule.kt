@@ -2,14 +2,14 @@ package com.mandro.di
 
 import com.mandro.BuildConfig
 import com.mandro.data.remote.api.MandrApiService
-import com.squareup.retrofit2.Retrofit
-import com.squareup.retrofit2.converter.gson.GsonConverterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 

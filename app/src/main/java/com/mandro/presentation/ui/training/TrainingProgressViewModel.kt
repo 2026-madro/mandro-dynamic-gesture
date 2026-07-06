@@ -25,6 +25,7 @@ data class TrainingProgressUiState(
     val steps: List<TrainingStep> = initialSteps(),
     val isDone: Boolean = false,
     val error: String? = null,
+    val estimatedSeconds: Int = 60,
 )
 
 private fun initialSteps() = listOf(
@@ -55,23 +56,18 @@ class TrainingProgressViewModel @Inject constructor(
                 return@launch
             }
 
-            val batch = emgRepository.getBatch(userId)
-            if (batch == null) {
-                _uiState.update { it.copy(error = "녹화된 데이터가 없어요. 녹화를 먼저 진행해 주세요.") }
-                return@launch
-            }
+            // 데이터는 수집 중 랩마다 이미 서버에 전송됨 — 학습만 요청
+            setDone(0, "완료")
+            setInProgress(1, "학습 요청 중...")
 
-            emgRepository.uploadAndTrain(userId, batch) { progress ->
+            emgRepository.uploadAndTrain(userId, null) { progress ->
                 when (progress) {
-                    is TrainingProgress.CheckingData -> {
-                        setInProgress(0, "확인 중...")
-                    }
+                    is TrainingProgress.CheckingData -> {}
                     is TrainingProgress.Building -> {
-                        setDone(0, "완료")
-                        setInProgress(1, "전송 중... ${progress.percent}%", progress.percent / 100f)
+                        setDone(1, "전송 완료")
+                        setInProgress(2, "분석 중... ${progress.percent}%", progress.percent / 100f)
                     }
                     is TrainingProgress.Analyzing -> {
-                        setDone(1, "전송 완료")
                         setInProgress(2, "분석 중...")
                     }
                     is TrainingProgress.Finalizing -> {

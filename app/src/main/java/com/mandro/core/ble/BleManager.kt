@@ -26,20 +26,24 @@ private const val PACKET_SIZE             = SAMPLES_PER_PACKET * EMG_CHANNELS  /
 
 @Singleton
 class BleManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context, // [질문] 이 컨텍스트 클래스가 뭔지? 안드로이드 단에 있는 기능 같긴 한데
 ) {
     private val adapter: BluetoothAdapter? =
+        // context라는 클래스에서 getSystemService 함수를 사용 , 그리고 Context 클래스에 선언된 블루투스 서비스라는 변수 주입? adapter는 뭘까..
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
-    private val _bleState = MutableStateFlow<BleState>(BleState.Disconnected)
+    // 뷰모델과 ui 의 역할을 분리하기 위해 이 구조를 많이 사용하는 것 같긴 한데 정확히 MutableStateFlow가 어떤 역할인지?
+    private val _bleState = MutableStateFlow<BleState>(BleState.Disconnected) // Blestate가 블루투스의 연결 상태를 나타내는 건 알겠는데, 그 원리가 뭔지, 왜 Blestate라는 클래스에서는 disconnected에서 자기 스스로를 또 호출하는 거자ㅣ?
     val bleState: StateFlow<BleState> = _bleState.asStateFlow()
 
+    // emg에서 데이터 받아오는 변수?
     private val _emgStream = MutableSharedFlow<EmgSample>(
         replay = 0,
         extraBufferCapacity = 512,
     )
     val emgStream: SharedFlow<EmgSample> = _emgStream.asSharedFlow()
 
+    // 얘는 추론 결과 받아오는 변수일 거고
     private val _inferenceStream = MutableSharedFlow<com.mandro.domain.model.InferenceResult>(
         replay = 1,
         extraBufferCapacity = 64,

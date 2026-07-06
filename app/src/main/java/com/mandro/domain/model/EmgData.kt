@@ -54,8 +54,7 @@ data class TrainingSession(
     val userId: String,
     val accuracy: Float,
     val gestureSet: GestureSet,
-    val modelPath: String,
-    val scalerPath: String,
+    val firmwarePath: String,  // firmware.bin 로컬 경로
     val trainedAt: Long = System.currentTimeMillis(),
 )
 

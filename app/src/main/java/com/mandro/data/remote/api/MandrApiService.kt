@@ -43,20 +43,10 @@ interface MandrApiService {
     @GET("sessions/{userId}/status")
     suspend fun getTrainingStatus(@Path("userId") userId: String): TrainingStatusResponse
 
-    /** 기본값: model.tflite (Android TFLite 추론용) */
+    /** 학습 완료 후 플래시할 firmware.bin 다운로드 */
     @Streaming
-    @GET("sessions/{userId}/model")
-    suspend fun downloadModel(
-        @Path("userId") userId: String,
-        @Query("file") file: String = "model.tflite",
-    ): ResponseBody
-
-    /**
-     * StandardScaler 파라미터. TFLite 추론 전 (x - mean) / std 정규화에 사용.
-     * mean, std: Float × 132
-     */
-    @GET("sessions/{userId}/scaler")
-    suspend fun getScaler(@Path("userId") userId: String): ScalerResponse
+    @GET("sessions/{userId}/firmware")
+    suspend fun downloadFirmware(@Path("userId") userId: String): ResponseBody
 
     // ── Health ──────────────────────────────────────────────────
 

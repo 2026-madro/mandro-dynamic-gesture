@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.mandro.data.local.UserPreferences
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.User
+import com.mandro.domain.repository.BleRepository
 import com.mandro.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +27,7 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val userPreferences: UserPreferences,
+    private val bleRepository: BleRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -34,8 +36,20 @@ class HomeViewModel @Inject constructor(
     private val _navigateToMain = Channel<Unit>(Channel.BUFFERED)
     val navigateToMain = _navigateToMain.receiveAsFlow()
 
+    private val _navigateToBleScan = Channel<Unit>(Channel.BUFFERED)
+    val navigateToBleScan = _navigateToBleScan.receiveAsFlow()
+
     init {
         loadUsers()
+        observeBleState()
+    }
+
+    private fun observeBleState() {
+        viewModelScope.launch {
+            bleRepository.bleState.collect { state ->
+                _uiState.update { it.copy(bleState = state) }
+            }
+        }
     }
 
     private fun loadUsers() {
@@ -52,5 +66,20 @@ class HomeViewModel @Inject constructor(
             userPreferences.saveUserId(user.id)
             _navigateToMain.send(Unit)
         }
+    }
+
+    fun onConnectBand() {
+        viewModelScope.launch {
+            val userId = userPreferences.getUserId()
+            if (userId == null) {
+                _uiState.update { it.copy(error = "암밴드를 연결하려면 먼저 유저를 선택해 주세요.") }
+            } else {
+                _navigateToBleScan.send(Unit)
+            }
+        }
+    }
+
+    fun onErrorDismissed() {
+        _uiState.update { it.copy(error = null) }
     }
 }

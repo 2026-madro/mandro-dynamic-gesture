@@ -5,7 +5,6 @@ import android.util.Log
 import com.mandro.data.local.db.RecordingTakeDao
 import com.mandro.data.local.db.RecordingTakeEntity
 import com.mandro.data.remote.api.MandrApiService
-import com.mandro.data.remote.dto.ScalerResponse
 import com.mandro.domain.model.*
 import com.mandro.domain.repository.EmgRepository
 import com.mandro.domain.repository.TrainingProgress
@@ -61,40 +60,71 @@ class EmgRepositoryImpl @Inject constructor(
         Log.d(TAG, "배치 초기화: userId=$userId")
     }
 
+    override suspend fun uploadTake(userId: String, take: RecordingTake): Result<Unit> = runCatching {
+        val gestureIdx = GESTURE_INDEX[take.gesture]
+            ?: throw IllegalArgumentException("알 수 없는 제스처: ${take.gesture}")
+
+        val totalSamples = take.windows.size * WINDOW_SIZE
+        val emgBuf = ByteBuffer.allocate(totalSamples * EMG_CHANNELS)
+        val labelBuf = ByteBuffer.allocate(totalSamples * Int.SIZE_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
+
+        for (window in take.windows) {
+            for (sample in window.data) {
+                for (ch in 0 until EMG_CHANNELS) {
+                    emgBuf.put(sample[ch].toInt().coerceIn(0, 255).toByte())
+                }
+                labelBuf.putInt(gestureIdx)
+            }
+        }
+
+        val emgPart = MultipartBody.Part.createFormData(
+            name = "emg_data", filename = "emg.bin",
+            body = emgBuf.array().toRequestBody("application/octet-stream".toMediaTypeOrNull()),
+        )
+        val labelPart = MultipartBody.Part.createFormData(
+            name = "labels", filename = "labels.bin",
+            body = labelBuf.array().toRequestBody("application/octet-stream".toMediaTypeOrNull()),
+        )
+        val lapCountBody = "1".toRequestBody("text/plain".toMediaTypeOrNull())
+        val gestureSetBody = GestureSet.SIX_CLASS.apiKey.toRequestBody("text/plain".toMediaTypeOrNull())
+
+        api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
+        Log.d(TAG, "랩 업로드 완료: userId=$userId gesture=${take.gesture} windows=${take.windows.size}")
+    }
+
     override suspend fun uploadAndTrain(
         userId: String,
-        batch: RecordingBatch,
+        batch: RecordingBatch?,
         onProgress: (TrainingProgress) -> Unit,
     ): Result<TrainingSession> = runCatching {
 
-        // ── 1. 바이너리 직렬화 ────────────────────────────────────
         onProgress(TrainingProgress.CheckingData)
 
-        val (emgBytes, labelBytes) = serializeBatch(batch)
-        val lapCount = batch.takes.values.maxOfOrNull { it.size } ?: 0
+        // batch가 있으면 업로드, null이면 이미 랩마다 올라간 것으로 간주
+        if (batch != null) {
+            val (emgBytes, labelBytes) = serializeBatch(batch)
+            val lapCount = batch.takes.values.maxOfOrNull { it.size } ?: 0
+            Log.i(TAG, "업로드 시작: userId=$userId lapCount=$lapCount samples=${emgBytes.size / EMG_CHANNELS}")
 
-        Log.i(TAG, "업로드 시작: userId=$userId lapCount=$lapCount samples=${emgBytes.size / EMG_CHANNELS}")
+            val emgPart = MultipartBody.Part.createFormData(
+                name = "emg_data", filename = "emg.bin",
+                body = emgBytes.toRequestBody("application/octet-stream".toMediaTypeOrNull()),
+            )
+            val labelPart = MultipartBody.Part.createFormData(
+                name = "labels", filename = "labels.bin",
+                body = labelBytes.toRequestBody("application/octet-stream".toMediaTypeOrNull()),
+            )
+            val lapCountBody = lapCount.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+            val gestureSetBody = batch.gestureSet.apiKey.toRequestBody("text/plain".toMediaTypeOrNull())
 
-        // ── 2. 업로드 ─────────────────────────────────────────────
-        val emgPart = MultipartBody.Part.createFormData(
-            name = "emg_data",
-            filename = "emg.bin",
-            body = emgBytes.toRequestBody("application/octet-stream".toMediaTypeOrNull()),
-        )
-        val labelPart = MultipartBody.Part.createFormData(
-            name = "labels",
-            filename = "labels.bin",
-            body = labelBytes.toRequestBody("application/octet-stream".toMediaTypeOrNull()),
-        )
-        val lapCountBody = lapCount.toString()
-            .toRequestBody("text/plain".toMediaTypeOrNull())
-        val gestureSetBody = batch.gestureSet.apiKey
-            .toRequestBody("text/plain".toMediaTypeOrNull())
+            api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
+            Log.i(TAG, "업로드 완료")
+        } else {
+            Log.i(TAG, "업로드 건너뜀 (랩마다 전송 완료): userId=$userId")
+        }
 
-        val session = api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
-        Log.i(TAG, "업로드 완료: sessionId=${session.id}")
-
-        // ── 3. 학습 시작 ──────────────────────────────────────────
+        // ── 학습 시작 ──────────────────────────────────────────
         api.startTraining(userId)
         onProgress(TrainingProgress.Building(0))
 
@@ -120,48 +150,34 @@ class EmgRepositoryImpl @Inject constructor(
 
         onProgress(TrainingProgress.Finalizing)
 
-        // ── 5. 모델 + 스케일러 다운로드 ──────────────────────────
-        val modelBytes = api.downloadModel(userId, "model.tflite").bytes()
-        val scaler = api.getScaler(userId)
-
-        Log.i(TAG, "모델 다운로드 완료: ${modelBytes.size} bytes, gestures=${scaler.gestures}")
-
-        // ── 6. 내부 저장소에 저장 ─────────────────────────────────
-        return@runCatching saveModel(userId, modelBytes, encodeScaler(scaler))
+        Log.i(TAG, "학습 완료: userId=$userId")
+        return@runCatching saveHeaderFiles(userId)
     }
 
-    override suspend fun saveModel(
-        userId: String,
-        modelBytes: ByteArray,
-        scalerBytes: ByteArray,
-    ): TrainingSession {
+    override suspend fun saveHeaderFiles(userId: String): TrainingSession {
         val dir = File(context.filesDir, "models/$userId").also { it.mkdirs() }
+        val firmwareFile = File(dir, "firmware.bin")
 
-        val modelFile = File(dir, "model.tflite").also { it.writeBytes(modelBytes) }
-        val scalerFile = File(dir, "scaler.bin").also { it.writeBytes(scalerBytes) }
-
-        Log.i(TAG, "모델 저장: ${modelFile.absolutePath}")
-
-        return TrainingSession(
-            userId = userId,
-            accuracy = 0f,         // scaler API에 accuracy 없음 — 필요 시 status에서 추출
-            gestureSet = GestureSet.SIX_CLASS,
-            modelPath = modelFile.absolutePath,
-            scalerPath = scalerFile.absolutePath,
-        )
-    }
-
-    override suspend fun getLatestSession(userId: String): TrainingSession? {
-        val modelFile = File(context.filesDir, "models/$userId/model.tflite")
-        val scalerFile = File(context.filesDir, "models/$userId/scaler.bin")
-        if (!modelFile.exists() || !scalerFile.exists()) return null
+        val bytes = api.downloadFirmware(userId).bytes()
+        firmwareFile.writeBytes(bytes)
+        Log.i(TAG, "firmware.bin 다운로드 완료: ${bytes.size} bytes → ${firmwareFile.absolutePath}")
 
         return TrainingSession(
             userId = userId,
             accuracy = 0f,
             gestureSet = GestureSet.SIX_CLASS,
-            modelPath = modelFile.absolutePath,
-            scalerPath = scalerFile.absolutePath,
+            firmwarePath = firmwareFile.absolutePath,
+        )
+    }
+
+    override suspend fun getLatestSession(userId: String): TrainingSession? {
+        val firmwareFile = File(context.filesDir, "models/$userId/firmware.bin")
+        if (!firmwareFile.exists()) return null
+        return TrainingSession(
+            userId = userId,
+            accuracy = 0f,
+            gestureSet = GestureSet.SIX_CLASS,
+            firmwarePath = firmwareFile.absolutePath,
         )
     }
 
@@ -201,14 +217,6 @@ class EmgRepositoryImpl @Inject constructor(
         return emgBuf.array() to labelBuf.array()
     }
 
-    /** ScalerResponse → 바이너리 (mean float32 × N + std float32 × N) */
-    private fun encodeScaler(scaler: ScalerResponse): ByteArray {
-        val n = scaler.mean.size
-        val buf = ByteBuffer.allocate(n * 2 * Float.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN)
-        scaler.mean.forEach { buf.putFloat(it) }
-        scaler.std.forEach { buf.putFloat(it) }
-        return buf.array()
-    }
 }
 
 private val GestureSet.apiKey: String

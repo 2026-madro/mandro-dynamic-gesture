@@ -6,12 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.mandro.data.local.UserPreferences
 import com.mandro.domain.repository.EmgRepository
 import com.mandro.domain.repository.UsbRepository
+import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 private const val TAG = "FirmwareViewModel"
@@ -47,8 +47,7 @@ class FirmwareViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(FirmwareUiState())
     val uiState = _uiState.asStateFlow()
 
-    private var modelBytes: ByteArray? = null
-    private var scalerBytes: ByteArray? = null
+    private var firmwareFile: File? = null
 
     init {
         observeUsbState()
@@ -84,13 +83,11 @@ class FirmwareViewModel @Inject constructor(
         viewModelScope.launch {
             val userId = userPreferences.getUserId() ?: return@launch
             val session = emgRepository.getLatestSession(userId)
-
-            if (session != null && File(session.modelPath).exists()) {
-                modelBytes  = File(session.modelPath).readBytes()
-                scalerBytes = File(session.scalerPath).readBytes()
+            if (session != null) {
+                firmwareFile = File(session.firmwarePath)
                 setCheckDone(2)
                 updateEnabled()
-                Log.i(TAG, "모델 준비 완료: ${session.modelPath}")
+                Log.i(TAG, "firmware.bin 준비 완료: ${session.firmwarePath}")
             } else {
                 _uiState.update { it.copy(error = "학습된 모델이 없어요. 학습을 먼저 진행해 주세요.") }
             }
@@ -98,12 +95,10 @@ class FirmwareViewModel @Inject constructor(
     }
 
     fun onStartUpdate() {
-        val model  = modelBytes  ?: return
-        val scaler = scalerBytes ?: return
-
+        val file = firmwareFile ?: return
         _uiState.update { it.copy(isUpdating = true, error = null) }
         viewModelScope.launch {
-            usbRepository.flash(model, scaler)
+            usbRepository.flash(file.readBytes(), ByteArray(0))
                 .onFailure { e ->
                     _uiState.update { it.copy(isUpdating = false, error = e.message) }
                 }

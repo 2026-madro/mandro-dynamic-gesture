@@ -17,16 +17,20 @@ interface EmgRepository {
     suspend fun getBatch(userId: String): RecordingBatch?
     suspend fun clearBatch(userId: String)
 
-    // 서버 학습 요청
+    // 랩 완료 시 즉시 서버 전송
+    suspend fun uploadTake(userId: String, take: RecordingTake): Result<Unit>
+
+    // batch=null이면 업로드 건너뛰고 학습만 요청 (랩마다 전송 시)
     suspend fun uploadAndTrain(
         userId: String,
-        batch: RecordingBatch,
+        batch: RecordingBatch?,
         onProgress: (TrainingProgress) -> Unit,
     ): Result<TrainingSession>
 
-    // 모델 로컬 저장
-    suspend fun saveModel(userId: String, modelBytes: ByteArray, scalerBytes: ByteArray): TrainingSession
+    // 학습 완료 후 MODEL.h / means.h / stds.h 로컬 저장
+    suspend fun saveHeaderFiles(userId: String): TrainingSession
     suspend fun getLatestSession(userId: String): TrainingSession?
+
 }
 
 interface BleRepository {
