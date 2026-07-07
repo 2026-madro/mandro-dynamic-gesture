@@ -47,8 +47,9 @@ class BleManager @Inject constructor(
 
     private var gatt: BluetoothGatt? = null
     private var packetCount = 0
-    // 두 Characteristic 구독을 순차적으로 처리하기 위한 플래그
     private var emgNotifyDone = false
+
+    @Volatile var emgEnabled = false
 
     // ── 스캔 ──────────────────────────────────────────────────
 
@@ -284,12 +285,12 @@ class BleManager @Inject constructor(
      * byte[s*8 + ch] → 채널 ch의 s번째 샘플값 (0~255)
      */
     private fun parseEmgPacket(bytes: ByteArray) {
+        if (!emgEnabled) return
         if (bytes.size != PACKET_SIZE) {
             Log.w(TAG, "예상치 못한 패킷 크기: ${bytes.size} bytes (기대값: $PACKET_SIZE) — 드롭")
             return
         }
         packetCount++
-        // 매 64번째 패킷(약 1초마다)만 로그 — CH0 첫 샘플값 출력
         if (packetCount % 64 == 0) {
             val ch0 = bytes[0].toInt() and 0xFF
             Log.d(TAG, "패킷 수신 #$packetCount — CH0[0]=$ch0 (0~255)")

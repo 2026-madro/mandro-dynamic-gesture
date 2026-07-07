@@ -36,6 +36,7 @@ import com.mandro.presentation.ui.user.UserScreen
 import com.mandro.presentation.ui.classify.ClassifyScreen
 import com.mandro.presentation.ui.collect.CollectScreen
 import com.mandro.presentation.ui.firmware.FirmwareScreen
+import com.mandro.presentation.ui.settings.SettingsScreen
 import com.mandro.presentation.ui.training.TrainingProgressScreen
 import com.mandro.presentation.ui.waveform.WaveformScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -161,6 +162,11 @@ class MainActivity : ComponentActivity() {
                                 onStartRecord = {
                                     navController.navigate(Screen.Collect.route)
                                 },
+                                onStartTrainingDirectly = {
+                                    navController.navigate(Screen.TrainingProgress.route) {
+                                        popUpTo(Screen.Training.route)
+                                    }
+                                },
                             )
                         }
                         composable(Screen.Classify.route) {
@@ -171,13 +177,26 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.Settings.route) {
-                            // TODO: SettingsScreen 구현 후 교체
+                            SettingsScreen(
+                                onGoHome = {
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            inclusive = true
+                                        }
+                                    }
+                                },
+                            )
                         }
                         composable(Screen.Guide.route) {
                             GuideScreen(
                                 onBack = { navController.popBackStack() },
                                 onStartRecord = {
                                     navController.navigate(Screen.Collect.route)
+                                },
+                                onStartTrainingDirectly = {
+                                    navController.navigate(Screen.TrainingProgress.route) {
+                                        popUpTo(Screen.Training.route)
+                                    }
                                 },
                             )
                         }

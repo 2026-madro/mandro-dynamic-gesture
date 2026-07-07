@@ -67,6 +67,7 @@ fun WaveformScreen(
             buffers = viewModel.buffers,
             getWritePtr = { viewModel.writePtr },
             onToggleChannel = viewModel::toggleChannel,
+            onRecalibrate = viewModel::startCalibration,
         )
     }
 }
@@ -77,6 +78,7 @@ private fun WaveformContent(
     buffers: Array<FloatArray>,
     getWritePtr: () -> Int = { 0 },
     onToggleChannel: (Int) -> Unit,
+    onRecalibrate: () -> Unit = {},
 ) {
     // 매 프레임마다 Canvas를 강제 갱신 — 리컴포지션 없이 드로잉만 반복
     // 이 방식이 StateFlow collect보다 레이턴시가 낮음
@@ -112,6 +114,13 @@ private fun WaveformContent(
                     text = "신호가 들어오지 않는 채널이 있는지 확인해주세요",
                     style = MaterialTheme.typography.labelSmall,
                     color = MandroPalette.Neutral500,
+                )
+            }
+            TextButton(onClick = onRecalibrate) {
+                Text(
+                    text = "기준선 다시 측정",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MandroPalette.Primary600,
                 )
             }
             ConnectionBadge(bleState = uiState.bleState)

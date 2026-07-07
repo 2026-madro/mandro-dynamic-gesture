@@ -18,6 +18,7 @@ class UserPreferences @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val KEY_USER_ID = stringPreferencesKey("user_id")
+    private val KEY_SESSION_ID = stringPreferencesKey("session_id")
 
     val userId: Flow<String?> = context.dataStore.data.map { it[KEY_USER_ID] }
 
@@ -27,7 +28,18 @@ class UserPreferences @Inject constructor(
         context.dataStore.edit { it[KEY_USER_ID] = id }
     }
 
+    // 업로드/학습 요청에 실제로 쓰인 세션을 기억해서, 재요청 시 서버가
+    // "최신 활성 세션"을 잘못 추론하지 않도록 항상 같은 세션을 가리키게 한다.
+    suspend fun getSessionId(): String? = context.dataStore.data.map { it[KEY_SESSION_ID] }.firstOrNull()
+
+    suspend fun saveSessionId(id: String) {
+        context.dataStore.edit { it[KEY_SESSION_ID] = id }
+    }
+
     suspend fun clear() {
-        context.dataStore.edit { it.remove(KEY_USER_ID) }
+        context.dataStore.edit {
+            it.remove(KEY_USER_ID)
+            it.remove(KEY_SESSION_ID)
+        }
     }
 }

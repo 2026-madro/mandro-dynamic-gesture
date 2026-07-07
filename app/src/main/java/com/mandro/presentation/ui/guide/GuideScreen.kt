@@ -33,6 +33,7 @@ fun GuideScreen(
     viewModel: GuideViewModel = hiltViewModel(),
     onBack: () -> Unit = {},
     onStartRecord: () -> Unit = {},
+    onStartTrainingDirectly: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -42,6 +43,7 @@ fun GuideScreen(
         onPrev = viewModel::onPrev,
         onNext = viewModel::onNext,
         onStartRecord = onStartRecord,
+        onStartTrainingDirectly = onStartTrainingDirectly,
     )
 }
 
@@ -52,6 +54,7 @@ private fun GuideContent(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onStartRecord: () -> Unit,
+    onStartTrainingDirectly: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MandroPalette.Neutral50,
@@ -213,19 +216,22 @@ private fun GuideContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (uiState.isLast) {
-                    // 마지막 동작 → 녹화 시작
                     MandroPrimaryButton(
                         text = "동작 녹화 시작하기",
                         onClick = onStartRecord,
                     )
                 } else {
-                    // 중간 동작 → 다음으로
                     MandroPrimaryButton(
                         text = "다음",
                         onClick = onNext,
                     )
                 }
-                if (uiState.currentIndex > 0) {
+                if (uiState.hasExistingData) {
+                    MandroSecondaryButton(
+                        text = "기존 데이터(${uiState.existingLapCount}랩)로 바로 학습",
+                        onClick = onStartTrainingDirectly,
+                    )
+                } else if (uiState.currentIndex > 0) {
                     MandroSecondaryButton(
                         text = "이전 동작 다시 보기",
                         onClick = onPrev,

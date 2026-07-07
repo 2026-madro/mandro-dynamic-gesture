@@ -17,6 +17,10 @@ interface EmgRepository {
     suspend fun getBatch(userId: String): RecordingBatch?
     suspend fun clearBatch(userId: String)
 
+    // 랩 재녹화 시 이전에 저장된 해당 랩(takeIndex)의 take들을 로컬에서 제거
+    // (서버에는 이미 업로드된 경우 삭제 API가 없어 반영되지 않음)
+    suspend fun deleteTakesForLap(userId: String, takeIndex: Int)
+
     // 랩 완료 시 즉시 서버 전송
     suspend fun uploadTake(userId: String, take: RecordingTake): Result<Unit>
 
@@ -42,6 +46,7 @@ interface BleRepository {
     suspend fun stopScan()
     suspend fun connect(device: BleDevice)
     suspend fun disconnect()
+    fun setEmgEnabled(enabled: Boolean)
 }
 
 interface UsbRepository {

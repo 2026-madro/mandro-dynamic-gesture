@@ -2,11 +2,15 @@ package com.mandro.presentation.ui.guide
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mandro.data.local.UserPreferences
 import com.mandro.domain.model.GestureSet
+import com.mandro.domain.repository.EmgRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class GestureGuide(
@@ -60,21 +64,38 @@ val GESTURE_GUIDES = mapOf(
 data class GuideUiState(
     val gestures: List<String> = GestureSet.SIX_CLASS.classes,
     val currentIndex: Int = 0,
+    val existingLapCount: Int = 0,  // Room DB에 이미 쌓인 랩 수
 ) {
     val current: GestureGuide get() = GESTURE_GUIDES[gestures[currentIndex]]!!
     val total: Int get() = gestures.size
     val isLast: Boolean get() = currentIndex == gestures.size - 1
+    val hasExistingData: Boolean get() = existingLapCount > 0
 }
 
 @HiltViewModel
 class GuideViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    private val emgRepository: EmgRepository,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
 
     private val startIndex = savedStateHandle.get<Int>("gestureIndex") ?: 0
 
     private val _uiState = MutableStateFlow(GuideUiState(currentIndex = startIndex))
     val uiState = _uiState.asStateFlow()
+
+    init {
+        loadExistingLapCount()
+    }
+
+    private fun loadExistingLapCount() {
+        viewModelScope.launch {
+            val userId = userPreferences.getUserId() ?: return@launch
+            val batch = emgRepository.getBatch(userId)
+            val lapCount = batch?.takes?.values?.maxOfOrNull { it.size } ?: 0
+            _uiState.update { it.copy(existingLapCount = lapCount) }
+        }
+    }
 
     fun onNext() {
         _uiState.update { state ->

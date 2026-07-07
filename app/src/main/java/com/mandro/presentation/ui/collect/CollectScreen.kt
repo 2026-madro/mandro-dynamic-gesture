@@ -44,8 +44,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mandro.BuildConfig
+import com.mandro.domain.model.BleDevice
+import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.GestureSet
+import com.mandro.presentation.components.ConnectionBadge
 import com.mandro.presentation.components.MandroPrimaryButton
 import com.mandro.presentation.components.MandroSecondaryButton
 import com.mandro.presentation.theme.MandroPalette
@@ -69,6 +72,8 @@ fun CollectScreen(
         getAmplitudes = { viewModel.channelAmplitudes },
         onStartTrainingEarly = viewModel::onStartTrainingEarly,
         onDebugSkip = viewModel::onDebugSkip,
+        onRedoLap = viewModel::onRedoLap,
+        onContinueToNextLap = viewModel::onContinueToNextLap,
     )
 }
 
@@ -78,7 +83,17 @@ private fun CollectContent(
     getAmplitudes: () -> FloatArray = { FloatArray(EMG_CHANNELS) },
     onStartTrainingEarly: () -> Unit = {},
     onDebugSkip: () -> Unit = {},
+    onRedoLap: () -> Unit = {},
+    onContinueToNextLap: () -> Unit = {},
 ) {
+    if (uiState.lapReviewPending) {
+        LapReviewDialog(
+            lapNumber = uiState.currentLap,
+            onRedo = onRedoLap,
+            onContinue = onContinueToNextLap,
+        )
+    }
+
     val lapProgressAnim by animateFloatAsState(
         targetValue = uiState.lapProgress,
         animationSpec = tween(600),
@@ -105,14 +120,40 @@ private fun CollectContent(
                 style = MaterialTheme.typography.headlineLarge,
                 color = MandroPalette.Neutral900,
             )
-            Text(
-                text = "${uiState.currentLap - 1} / $TOTAL_LAPS 랩",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MandroPalette.Neutral500,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${uiState.currentLap - 1} / $TOTAL_LAPS 랩",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MandroPalette.Neutral500,
+                )
+                Spacer(Modifier.width(8.dp))
+                ConnectionBadge(bleState = uiState.bleState)
+            }
         }
 
         Spacer(Modifier.height(8.dp))
+
+        AnimatedVisibility(
+            visible = uiState.isDisconnected,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut(),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MandroPalette.Danger600.copy(alpha = 0.1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+            ) {
+                Text(
+                    text = "블루투스 연결이 끊겼어요. 다시 연결되면 자동으로 이어서 녹화합니다.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MandroPalette.Danger600,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
 
         // 랩 진행 바
         LinearProgressIndicator(
@@ -294,6 +335,40 @@ private fun CollectContent(
 }
 
 @Composable
+private fun LapReviewDialog(
+    lapNumber: Int,
+    onRedo: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},  // 바깥 탭으로 닫히지 않도록 — 반드시 선택해야 함
+        title = {
+            Text(
+                text = "${lapNumber}랩 녹화 완료",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        },
+        text = {
+            Text(
+                text = "방금 녹화한 ${lapNumber}랩을 그대로 사용할까요,\n다시 녹화할까요?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MandroPalette.Neutral700,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onContinue) {
+                Text("다음 랩 진행", color = MandroPalette.Primary600)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onRedo) {
+                Text("다시 녹화", color = MandroPalette.Danger600)
+            }
+        },
+    )
+}
+
+@Composable
 private fun CountdownCircle(count: Int) {
     Box(
         modifier = Modifier
@@ -453,6 +528,9 @@ private fun GestureRow(
 
 // ── 프리뷰 ────────────────────────────────────────────────────
 
+private val previewConnectedState =
+    BleState.Connected(BleDevice("ESP32S3_FAST_BLE", "00:11:22:33:44:55", -55))
+
 @Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
 @Composable
 private fun CollectPreview_Countdown() {
@@ -462,6 +540,7 @@ private fun CollectPreview_Countdown() {
                 currentLap = 3,
                 currentGestureIndex = 2,
                 phase = CollectPhase.Countdown(3),
+                bleState = previewConnectedState,
             )
         )
     }
@@ -477,6 +556,38 @@ private fun CollectPreview_CanTrain() {
                 currentGestureIndex = 0,
                 phase = CollectPhase.Recording,
                 gestures = GestureSet.SIX_CLASS.classes,
+                bleState = previewConnectedState,
+            )
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun CollectPreview_Disconnected() {
+    MandroTheme {
+        CollectContent(
+            uiState = CollectUiState(
+                currentLap = 3,
+                currentGestureIndex = 2,
+                phase = CollectPhase.Recording,
+                bleState = BleState.Disconnected,
+            )
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF7F8FA)
+@Composable
+private fun CollectPreview_LapReview() {
+    MandroTheme {
+        CollectContent(
+            uiState = CollectUiState(
+                currentLap = 3,
+                currentGestureIndex = 5,
+                phase = CollectPhase.Recording,
+                bleState = previewConnectedState,
+                lapReviewPending = true,
             )
         )
     }

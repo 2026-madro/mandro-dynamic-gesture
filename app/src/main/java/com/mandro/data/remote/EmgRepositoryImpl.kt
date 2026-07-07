@@ -2,6 +2,7 @@ package com.mandro.data.remote
 
 import android.content.Context
 import android.util.Log
+import com.mandro.data.local.UserPreferences
 import com.mandro.data.local.db.RecordingTakeDao
 import com.mandro.data.local.db.RecordingTakeEntity
 import com.mandro.data.remote.api.MandrApiService
@@ -37,6 +38,7 @@ class EmgRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val api: MandrApiService,
     private val takeDao: RecordingTakeDao,
+    private val userPreferences: UserPreferences,
 ) : EmgRepository {
 
     override suspend fun saveTake(userId: String, take: RecordingTake) {
@@ -58,6 +60,11 @@ class EmgRepositoryImpl @Inject constructor(
     override suspend fun clearBatch(userId: String) {
         takeDao.deleteByUserId(userId)
         Log.d(TAG, "배치 초기화: userId=$userId")
+    }
+
+    override suspend fun deleteTakesForLap(userId: String, takeIndex: Int) {
+        takeDao.deleteByUserIdAndTakeIndex(userId, takeIndex)
+        Log.d(TAG, "랩 재녹화 - 기존 take 삭제: userId=$userId takeIndex=$takeIndex")
     }
 
     override suspend fun uploadTake(userId: String, take: RecordingTake): Result<Unit> = runCatching {
@@ -89,8 +96,9 @@ class EmgRepositoryImpl @Inject constructor(
         val lapCountBody = "1".toRequestBody("text/plain".toMediaTypeOrNull())
         val gestureSetBody = GestureSet.SIX_CLASS.apiKey.toRequestBody("text/plain".toMediaTypeOrNull())
 
-        api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
-        Log.d(TAG, "랩 업로드 완료: userId=$userId gesture=${take.gesture} windows=${take.windows.size}")
+        val session = api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
+        userPreferences.saveSessionId(session.id)
+        Log.d(TAG, "랩 업로드 완료: userId=$userId gesture=${take.gesture} windows=${take.windows.size} sessionId=${session.id}")
     }
 
     override suspend fun uploadAndTrain(
@@ -101,7 +109,11 @@ class EmgRepositoryImpl @Inject constructor(
 
         onProgress(TrainingProgress.CheckingData)
 
-        // batch가 있으면 업로드, null이면 이미 랩마다 올라간 것으로 간주
+        // batch가 있으면 업로드해서 그 응답의 session_id를 기억, null이면
+        // 랩마다 전송하며 저장해둔 session_id를 재사용 (서버가 "최신 활성
+        // 세션"을 잘못 추론해 다른 세션을 대상으로 학습하는 것을 방지)
+        var sessionId = userPreferences.getSessionId()
+
         if (batch != null) {
             val (emgBytes, labelBytes) = serializeBatch(batch)
             val lapCount = batch.takes.values.maxOfOrNull { it.size } ?: 0
@@ -118,21 +130,40 @@ class EmgRepositoryImpl @Inject constructor(
             val lapCountBody = lapCount.toString().toRequestBody("text/plain".toMediaTypeOrNull())
             val gestureSetBody = batch.gestureSet.apiKey.toRequestBody("text/plain".toMediaTypeOrNull())
 
-            api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
-            Log.i(TAG, "업로드 완료")
+            val session = api.uploadData(userId, emgPart, labelPart, lapCountBody, gestureSetBody)
+            sessionId = session.id
+            userPreferences.saveSessionId(sessionId)
+            Log.i(TAG, "업로드 완료: sessionId=$sessionId")
         } else {
-            Log.i(TAG, "업로드 건너뜀 (랩마다 전송 완료): userId=$userId")
+            Log.i(TAG, "업로드 건너뜀 (랩마다 전송 완료): userId=$userId sessionId=$sessionId")
         }
 
-        // ── 학습 시작 ──────────────────────────────────────────
-        api.startTraining(userId)
+        // ── 이미 학습이 끝난 세션이면 재학습 없이 바로 결과물 다운로드 ──
+        if (sessionId != null) {
+            val already = runCatching { api.getTrainingStatus(userId, sessionId) }.getOrNull()
+            if (already?.status == "done") {
+                Log.i(TAG, "이미 학습 완료된 세션(sessionId=$sessionId) — 재학습 건너뜀")
+                onProgress(TrainingProgress.Finalizing)
+                return@runCatching saveHeaderFiles(userId)
+            }
+        }
+
+        // ── 학습 시작 (409 = 이미 진행 중 → 무시하고 폴링으로) ──
+        val trainResp = api.startTraining(userId, sessionId)
+        if (!trainResp.isSuccessful && trainResp.code() != 409) {
+            throw RuntimeException("학습 시작 실패: ${trainResp.code()}")
+        }
+        trainResp.body()?.let {
+            sessionId = it.id
+            userPreferences.saveSessionId(it.id)
+        }
         onProgress(TrainingProgress.Building(0))
 
         // ── 4. 상태 폴링 ──────────────────────────────────────────
         var lastStatus = ""
         while (true) {
             delay(POLL_INTERVAL_MS)
-            val statusResp = api.getTrainingStatus(userId)
+            val statusResp = api.getTrainingStatus(userId, sessionId)
             val progress = statusResp.progress
 
             if (statusResp.status != lastStatus) {

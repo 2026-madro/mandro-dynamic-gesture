@@ -21,4 +21,5 @@ class BleRepositoryImpl @Inject constructor(
     override suspend fun stopScan() = bleManager.stopScan()
     override suspend fun connect(device: BleDevice) = bleManager.connect(device)
     override suspend fun disconnect() = bleManager.disconnect()
+    override fun setEmgEnabled(enabled: Boolean) { bleManager.emgEnabled = enabled }
 }

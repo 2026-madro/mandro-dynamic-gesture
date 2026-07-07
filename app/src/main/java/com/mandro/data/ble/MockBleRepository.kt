@@ -66,6 +66,8 @@ class MockBleRepository @Inject constructor() : BleRepository {
         _bleState.value = BleState.Disconnected
     }
 
+    override fun setEmgEnabled(enabled: Boolean) {}  // Mock에서는 항상 emit
+
     // 64Hz Notify 시뮬레이션 — 패킷당 20샘플, uint8 범위(0~255)
     private fun startMockEmgStream() {
         scope.launch {

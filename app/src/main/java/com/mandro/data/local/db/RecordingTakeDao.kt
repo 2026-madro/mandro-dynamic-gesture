@@ -19,4 +19,7 @@ interface RecordingTakeDao {
 
     @Query("DELETE FROM recording_takes WHERE userId = :userId")
     suspend fun deleteByUserId(userId: String)
+
+    @Query("DELETE FROM recording_takes WHERE userId = :userId AND takeIndex = :takeIndex")
+    suspend fun deleteByUserIdAndTakeIndex(userId: String, takeIndex: Int)
 }

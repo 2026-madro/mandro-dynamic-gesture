@@ -4,6 +4,7 @@ import com.mandro.data.remote.dto.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.*
 
 interface MandrApiService {
@@ -36,12 +37,19 @@ interface MandrApiService {
         @Part("gesture_set") gestureSet: RequestBody,
     ): SessionResponse
 
+    /** sessionId를 넘기면 그 세션을 정확히 대상으로 함. 없으면 서버가 최신 활성 세션을 추론. */
     @POST("sessions/{userId}/train")
-    suspend fun startTraining(@Path("userId") userId: String): SessionResponse
+    suspend fun startTraining(
+        @Path("userId") userId: String,
+        @Query("session_id") sessionId: String? = null,
+    ): Response<SessionResponse>
 
-    /** 앱은 2~3초 간격으로 폴링 */
+    /** 앱은 2~3초 간격으로 폴링. sessionId 생략 시 서버가 최신 세션을 추론(하위 호환). */
     @GET("sessions/{userId}/status")
-    suspend fun getTrainingStatus(@Path("userId") userId: String): TrainingStatusResponse
+    suspend fun getTrainingStatus(
+        @Path("userId") userId: String,
+        @Query("session_id") sessionId: String? = null,
+    ): TrainingStatusResponse
 
     /** 학습 완료 후 플래시할 firmware.bin 다운로드 */
     @Streaming

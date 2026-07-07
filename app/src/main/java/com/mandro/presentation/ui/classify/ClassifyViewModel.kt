@@ -35,9 +35,15 @@ class ClassifyViewModel @Inject constructor(
     val channelValues = FloatArray(EMG_CHANNELS)
 
     init {
+        bleRepository.setEmgEnabled(true)
         observeBleState()
         observeInference()
         observeEmg()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        bleRepository.setEmgEnabled(false)
     }
 
     private fun observeBleState() {

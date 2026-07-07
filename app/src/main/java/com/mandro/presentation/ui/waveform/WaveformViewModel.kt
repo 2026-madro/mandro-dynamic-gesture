@@ -63,8 +63,14 @@ class WaveformViewModel @Inject constructor(
     private var smoothIdx = 0
 
     init {
+        bleRepository.setEmgEnabled(true)
         observeBleState()
         collectEmgStream()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        bleRepository.setEmgEnabled(false)
     }
 
     private fun observeBleState() {
@@ -130,6 +136,9 @@ class WaveformViewModel @Inject constructor(
     }
 
     fun startCalibration() {
+        // 재측정 시에도 이전 기준선(isCalibrated=true)을 지워야 collectEmgStream이
+        // 다시 샘플을 받아들인다 — 안 지우면 재측정이 영원히 progress=0에서 멈춘다.
+        restCalibration.reset()
         calibrationBuf.clear()
         _uiState.value = _uiState.value.copy(
             calibration = CalibrationState.Calibrating,
