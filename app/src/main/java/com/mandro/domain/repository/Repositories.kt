@@ -35,6 +35,11 @@ interface EmgRepository {
     suspend fun saveHeaderFiles(userId: String): TrainingSession
     suspend fun getLatestSession(userId: String): TrainingSession?
 
+    // 모델 히스토리 — 학습 완료(done)된 세션 목록, 최신순
+    suspend fun getSessionHistory(userId: String): Result<List<TrainingSessionSummary>>
+
+    // 히스토리에서 선택한 특정 세션의 firmware.bin을 세션별 로컬 캐시에 다운로드
+    suspend fun downloadSessionFirmware(userId: String, sessionId: String): Result<TrainingSession>
 }
 
 interface BleRepository {

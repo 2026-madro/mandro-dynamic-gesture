@@ -28,6 +28,7 @@ data class SessionResponse(
     @SerializedName("progress") val progress: Int,  // 0~100
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("trained_at") val trainedAt: String?,
+    @SerializedName("val_accuracy") val valAccuracy: Float?,
 )
 
 data class TrainingStatusResponse(

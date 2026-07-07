@@ -51,10 +51,17 @@ interface MandrApiService {
         @Query("session_id") sessionId: String? = null,
     ): TrainingStatusResponse
 
-    /** 학습 완료 후 플래시할 firmware.bin 다운로드 */
+    /** 학습 완료 후 플래시할 firmware.bin 다운로드. sessionId 생략 시 최신 done 세션 */
     @Streaming
     @GET("sessions/{userId}/firmware")
-    suspend fun downloadFirmware(@Path("userId") userId: String): ResponseBody
+    suspend fun downloadFirmware(
+        @Path("userId") userId: String,
+        @Query("session_id") sessionId: String? = null,
+    ): ResponseBody
+
+    /** 학습 완료(done)된 세션 히스토리 목록, 최신순 */
+    @GET("sessions/{userId}/history")
+    suspend fun listSessionHistory(@Path("userId") userId: String): List<SessionResponse>
 
     // ── Health ──────────────────────────────────────────────────
 

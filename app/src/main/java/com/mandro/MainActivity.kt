@@ -36,6 +36,7 @@ import com.mandro.presentation.ui.user.UserScreen
 import com.mandro.presentation.ui.classify.ClassifyScreen
 import com.mandro.presentation.ui.collect.CollectScreen
 import com.mandro.presentation.ui.firmware.FirmwareScreen
+import com.mandro.presentation.ui.history.HistoryScreen
 import com.mandro.presentation.ui.settings.SettingsScreen
 import com.mandro.presentation.ui.training.TrainingProgressScreen
 import com.mandro.presentation.ui.waveform.WaveformScreen
@@ -184,6 +185,17 @@ class MainActivity : ComponentActivity() {
                                             inclusive = true
                                         }
                                     }
+                                },
+                                onGoHistory = {
+                                    navController.navigate(Screen.History.route)
+                                },
+                            )
+                        }
+                        composable(Screen.History.route) {
+                            HistoryScreen(
+                                onBack = { navController.popBackStack() },
+                                onSessionChosen = {
+                                    navController.navigate(Screen.Firmware.route)
                                 },
                             )
                         }

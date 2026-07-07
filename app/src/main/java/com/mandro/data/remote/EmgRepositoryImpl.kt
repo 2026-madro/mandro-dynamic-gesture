@@ -186,15 +186,19 @@ class EmgRepositoryImpl @Inject constructor(
     }
 
     override suspend fun saveHeaderFiles(userId: String): TrainingSession {
-        val dir = File(context.filesDir, "models/$userId").also { it.mkdirs() }
+        // 학습 직후 흐름 — uploadAndTrain에서 저장해둔 "지금 학습한 세션"을 사용
+        val sessionId = userPreferences.getSessionId()
+            ?: throw IllegalStateException("세션 정보가 없어요. 다시 학습해 주세요.")
+        val dir = File(context.filesDir, "models/$userId/$sessionId").also { it.mkdirs() }
         val firmwareFile = File(dir, "firmware.bin")
 
-        val bytes = api.downloadFirmware(userId).bytes()
+        val bytes = api.downloadFirmware(userId, sessionId).bytes()
         firmwareFile.writeBytes(bytes)
         Log.i(TAG, "firmware.bin 다운로드 완료: ${bytes.size} bytes → ${firmwareFile.absolutePath}")
 
         return TrainingSession(
             userId = userId,
+            sessionId = sessionId,
             accuracy = 0f,
             gestureSet = GestureSet.SIX_CLASS,
             firmwarePath = firmwareFile.absolutePath,
@@ -202,10 +206,48 @@ class EmgRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getLatestSession(userId: String): TrainingSession? {
-        val firmwareFile = File(context.filesDir, "models/$userId/firmware.bin")
+        // 히스토리에서 다른 세션을 선택했다면 그게 "최신 선택"으로 저장돼 있음
+        val sessionId = userPreferences.getSessionId() ?: return null
+        val firmwareFile = File(context.filesDir, "models/$userId/$sessionId/firmware.bin")
         if (!firmwareFile.exists()) return null
         return TrainingSession(
             userId = userId,
+            sessionId = sessionId,
+            accuracy = 0f,
+            gestureSet = GestureSet.SIX_CLASS,
+            firmwarePath = firmwareFile.absolutePath,
+        )
+    }
+
+    override suspend fun getSessionHistory(userId: String): Result<List<TrainingSessionSummary>> = runCatching {
+        api.listSessionHistory(userId)
+            .filter { it.status == "done" }
+            .map {
+                TrainingSessionSummary(
+                    sessionId = it.id,
+                    lapCount = it.lapCount,
+                    accuracy = it.valAccuracy,
+                    trainedAt = it.trainedAt?.let(::parseIsoToEpochMillis) ?: 0L,
+                )
+            }
+    }
+
+    override suspend fun downloadSessionFirmware(
+        userId: String, sessionId: String,
+    ): Result<TrainingSession> = runCatching {
+        val dir = File(context.filesDir, "models/$userId/$sessionId").also { it.mkdirs() }
+        val firmwareFile = File(dir, "firmware.bin")
+
+        val bytes = api.downloadFirmware(userId, sessionId).bytes()
+        firmwareFile.writeBytes(bytes)
+        Log.i(TAG, "히스토리 세션 firmware.bin 다운로드: sessionId=$sessionId ${bytes.size} bytes")
+
+        // 이 세션을 "현재 선택된 모델"로 기억해서 FirmwareScreen이 이걸 찾도록 함
+        userPreferences.saveSessionId(sessionId)
+
+        TrainingSession(
+            userId = userId,
+            sessionId = sessionId,
             accuracy = 0f,
             gestureSet = GestureSet.SIX_CLASS,
             firmwarePath = firmwareFile.absolutePath,
@@ -213,6 +255,18 @@ class EmgRepositoryImpl @Inject constructor(
     }
 
     // ── 내부 헬퍼 ──────────────────────────────────────────────────
+
+    /**
+     * 백엔드가 naive UTC(datetime.utcnow().isoformat())로 보내는 시각 문자열을
+     * epoch millis로 변환. minSdk 24라 java.time 대신 SimpleDateFormat 사용.
+     */
+    private fun parseIsoToEpochMillis(iso: String): Long? = runCatching {
+        val normalized = iso.replace(Regex("""(\.\d{3})\d*$"""), "$1")
+            .let { if (it.contains('.')) it else "$it.000" }
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US)
+        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        sdf.parse(normalized)?.time
+    }.getOrNull()
 
     /**
      * RecordingBatch → (emg_data bytes, labels bytes)

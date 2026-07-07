@@ -52,10 +52,19 @@ data class RecordingBatch(
 // 학습 세션 결과
 data class TrainingSession(
     val userId: String,
+    val sessionId: String,
     val accuracy: Float,
     val gestureSet: GestureSet,
     val firmwarePath: String,  // firmware.bin 로컬 경로
     val trainedAt: Long = System.currentTimeMillis(),
+)
+
+// 모델 히스토리 목록의 항목 (학습 완료된 세션 요약)
+data class TrainingSessionSummary(
+    val sessionId: String,
+    val lapCount: Int,
+    val accuracy: Float?,   // null이면 구버전 세션이라 정확도 정보 없음
+    val trainedAt: Long,
 )
 
 // 실시간 분류 결과
