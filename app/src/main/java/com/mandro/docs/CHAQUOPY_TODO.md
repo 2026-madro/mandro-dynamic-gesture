@@ -20,7 +20,7 @@
 
 ## Phase 1 — Python 학습 파이프라인 완성
 
-- [ ] `lib/preprocessing.py`: `mandro-backend/app/ml/lib/preprocessing.py`에서 `BP_filter`, `compute_enveloppe` 복사
+- [ ] `lib/preprocessing.py`: `mandro-backend/app/ml/lib/preprocessing.py`에서 `BP_filter`, `compute_envelope` 복사
 - [ ] `lib/features/features.py`: `mandro-backend/app/ml/lib/features/features.py`에서 `extract_features`, `extract_features_tsd` 복사
 - [ ] `lib/pipeline.py`: `extract_features_pipeline`, `fit_scaler`, `apply_scaler` 복사
 - [ ] `lib/windowing.py`: `get_windows`, `get_action_windows`, `split_train_val` 복사

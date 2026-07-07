@@ -21,22 +21,10 @@ from lib.config import WEIGHT_TOTAL_BYTES
 
 
 def serialize_weights(model) -> bytes:
-    """
-    Parameters
-    ----------
-    model : sklearn.neural_network.MLPClassifier (학습 완료 상태)
-
-    Returns
-    -------
-    bytes, 길이 WEIGHT_TOTAL_BYTES (52,248)
-
-    구현 가이드:
-        buffers = []
-        for W, b in zip(model.coefs_, model.intercepts_):
-            buffers.append(W.astype(np.float32).tobytes())
-            buffers.append(b.astype(np.float32).tobytes())
-        result = b"".join(buffers)
-        assert len(result) == WEIGHT_TOTAL_BYTES
-        return result
-    """
-    raise NotImplementedError
+    buffers = []
+    for W, b in zip(model.coefs_, model.intercepts_):
+        buffers.append(W.astype(np.float32).tobytes())
+        buffers.append(b.astype(np.float32).tobytes())
+    result = b"".join(buffers)
+    assert len(result) == WEIGHT_TOTAL_BYTES
+    return result

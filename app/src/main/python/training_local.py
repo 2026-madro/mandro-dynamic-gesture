@@ -8,6 +8,8 @@ Chaquopy를 통해 Kotlin에서 호출되는 로컬 학습 엔트리 포인트.
     W0(132x64) b0(64) W1(64x64) b1(64) W2(64x6) b2(6) = 52,248 bytes
 """
 
+import traceback
+
 import numpy as np
 
 from lib.config import RANDOM_STATE

@@ -15,38 +15,26 @@ from lib.config import N_CLASSES, VAL_RATIO, RANDOM_STATE
 from lib.windowing import split_train_val
 from lib.pipeline import fit_scaler, apply_scaler
 
-
+# [질문] 학습시키는 함수?
 def fit_local_model(X: np.ndarray, y: np.ndarray):
-    """
-    Parameters
-    ----------
-    X : np.ndarray shape (W, 132) — extract_features_pipeline 결과
-    y : np.ndarray shape (W,)     — 정수 레이블 (0~5)
+    from sklearn.neural_network import MLPClassifier
 
-    Returns
-    -------
-    (model: sklearn.neural_network.MLPClassifier, scaler: StandardScaler)
+    scaler = fit_scaler(X)
+    X_scaled = apply_scaler(scaler, X)
+    X_train, y_train, X_val, y_val = split_train_val(
+        X_scaled, y, val_size=VAL_RATIO, random_state=RANDOM_STATE
+    )
 
-    구현 가이드:
-        from sklearn.neural_network import MLPClassifier
+    model = MLPClassifier(
+        hidden_layer_sizes=(64, 64),
+        activation="relu",
+        solver="adam",
+        max_iter=200,
+        early_stopping=True,
+        n_iter_no_change=10,
+        validation_fraction=0.15,
+        random_state=RANDOM_STATE,
+    )
+    model.fit(X_train, y_train)
 
-        scaler = fit_scaler(X)
-        X_scaled = apply_scaler(scaler, X)
-        X_train, y_train, X_val, y_val = split_train_val(
-            X_scaled, y, val_size=VAL_RATIO, random_state=RANDOM_STATE
-        )
-
-        model = MLPClassifier(
-            hidden_layer_sizes=(64, 64),
-            activation="relu",
-            solver="adam",
-            max_iter=200,
-            early_stopping=True,
-            n_iter_no_change=10,
-            validation_fraction=0.15,
-            random_state=RANDOM_STATE,
-        )
-        model.fit(X_train, y_train)
-        # 필요하면 X_val/y_val로 val_accuracy 계산해서 같이 리턴
-    """
-    raise NotImplementedError
+    return model, scaler
