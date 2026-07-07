@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    id("com.chaquo.python")
 }
 
 android {
@@ -16,6 +17,9 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -48,6 +52,17 @@ android {
 
     kotlinOptions {
         jvmTarget = "21"
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.10"
+        pip {
+            install("numpy")
+            install("scipy")
+            install("scikit-learn")
+        }
     }
 }
 
