@@ -64,19 +64,36 @@
 - [x] `FirmwareViewModel`/`LocalTrainingRepositoryImpl`/`TrainingProgressViewModel`의 바이트 상수 53,304로 갱신
 - [x] BLE 경유 전송 구현 — `BleManager.kt::sendWeights()`. USB와 동일한 페이로드를 MTU 기준 244바이트씩(~219개) 순차 Write Request로 전송, 신규 Characteristic(`...58`, WRITE+NOTIFY)의 NOTIFY로 `OK:WEIGHTS`/`ERR:*` 응답 대기 (10초 타임아웃). 상세 스펙: `docs/FIRMWARE_PROTOCOL.md` 4-1절
 - [x] `WeightTransferState`(Idle/Sending/Done/Error) 신설 — `BleRepository`/`BleRepositoryImpl`/`MockBleRepository`에 배선
-- [ ] UI 연결 미완료 — `FirmwareScreen`에서 USB/BLE 둘 중 선택하는 화면은 아직 없음 (지금은 `usbRepository.flash()`만 호출)
+- [x] UI 연결 완료 — `FirmwareViewModel`이 `usbRepository` 대신 `bleRepository`를 쓰도록 변경 (`bleState`로 연결 확인, `sendWeights()`로 전송, `weightTransferState`로 진행률/완료/에러 반영). USB는 아래 "USB 상태" 참고 — 코드는 남겨뒀지만 이 화면에서는 더 이상 안 씀. `FirmwareScreen.kt`의 체크리스트도 "USB 케이블 연결됨"+"암밴드 감지됨" 2개 → "암밴드 연결됨" 1개로 통합
 
-## Phase 5 — 펌웨어 쪽 (상대방 담당)
+## Phase 5 — 펌웨어 쪽 — 완료 (2026-07-10, 상대방 담당이었으나 이번엔 같이 구현함)
 
-- [ ] `MODEL.h`에서 가중치 배열 제거, 토폴로지 상수만 유지
-- [ ] `nn.cpp`에 `loadFromLittleFS()` 구현 (W0 b0 W1 b1 W2 b2 means stds 순서로 읽기, 총 13,326 floats)
-- [ ] `.ino`에 LittleFS 초기화 + USB 수신 모드(매직넘버 0xDEADBEEF 감지 → LittleFS 저장 → 재부팅) 추가
-- [ ] **신규**: BLE GATT에 Characteristic `abcd1234-5678-1234-5678-abcdef123458` (WRITE+NOTIFY) 추가 — 스펙은 `docs/FIRMWARE_PROTOCOL.md` 4-1절 참고.
-  - 매직넘버/CRC **검증** 로직은 USB와 재사용 가능하지만, **수신/재조립 로직은 별도 구현 필요**. USB Serial은 연속 스트림이라 그냥 읽으면 되지만, BLE는 Android(`BleManager.kt::sendWeights()`)가 **244바이트 단위(~219개 Write Request)**로 쪼개서 보내므로, 펌웨어는 각 Write를 순서대로 누적 버퍼에 이어붙이다가 헤더에 명시된 총 길이(53,304B)만큼 다 모이면 그때 매직넘버/CRC 검증하는 상태 머신이 필요함
-  - 청크 크기는 Android 쪽에서 이미 244바이트(MTU 247 - ATT 헤더 3바이트)로 고정 구현됨 — 펌웨어에서 별도로 청크 크기를 정할 필요 없이, 그 크기의 Write를 받아들이는 버퍼만 준비하면 됨
-- [ ] **신규(안전장치)**: 가중치 파일은 임시 파일(예: `/weights.tmp`)에 먼저 쓰고, CRC 검증까지 통과한 뒤에만 `/weights.bin`으로 교체(rename). 전송 도중 BLE 연결 끊김/USB 뽑힘 등으로 실패해도 기존에 쓰던 가중치 파일이 훼손되지 않도록 함 (CRC 불일치 시 임시 파일만 삭제, 기존 `/weights.bin`은 그대로 유지)
-- [ ] 더미 가중치(53,304바이트)로 수신→저장→로드 단독 테스트 (USB, BLE 둘 다) — LittleFS 자체의 53KB 쓰기/읽기 무결성은 `C:/esp32-littlefs-test/`에서 별도 검증 완료 (`README.md` 참고), 이번엔 실제 전송 경로(USB/BLE) 포함해서 재확인
-- [ ] `partitions.csv`에 LittleFS 파티션 최소 256KB 확보 (실측: 53,304B 저장 시 LittleFS `사용 중` 65,536B로 나옴 — 블록 정렬로 파일 크기보다 약간 더 잡힘. 256KB면 충분한 여유)
+- [x] `MODEL.h`에서 가중치 배열 제거, 토폴로지 상수만 유지
+- [x] `nn.cpp`에 `loadFromLittleFS()` 구현 (W0 b0 W1 b1 W2 b2 means stds 순서로 읽기, 총 13,326 floats).
+  기존 `predict()`는 가중치를 "W 전부 이어붙인 배열 + b 전부 이어붙인 배열"로 나눠 저장하는
+  레이아웃이라, 파일의 interleaved 순서를 읽으면서 이 레이아웃으로 재배치하는 게 핵심이었음.
+  means/stds는 `Preprocessor::setStandardizer()`로 별도 전달 (스케일러는 `NeuralNet`이 아니라
+  `Preprocessor`가 씀).
+- [x] `.ino`에 LittleFS 초기화 + USB/BLE 수신 모드(매직넘버 0xDEADBEEF 감지 → LittleFS 저장 →
+  재부팅) 추가
+- [x] BLE GATT Characteristic `abcd1234-5678-1234-5678-abcdef123458` (WRITE+NOTIFY) 구현 —
+  `WeightsCharCallbacks::onWrite()`가 244바이트 청크를 누적 버퍼에 재조립, 매직넘버/LENGTH/CRC32
+  다 모이면 저장. 스펙은 `docs/FIRMWARE_PROTOCOL.md` 4-1절.
+- [x] 임시 파일 안전장치 — `saveWeightsIfCrcOk()`가 `/weights.tmp`에 먼저 쓰고 CRC 통과 시에만
+  `/weights.bin`으로 rename. USB/BLE 공용 함수로 구현해서 검증 로직 중복 없음.
+- [x] **BLE 실기기 테스트 성공** — 파이썬 `bleak` 라이브러리로 더미 가중치(53,304바이트,
+  219개 청크)를 실제 BLE로 전송 → CRC 통과 → `OK:WEIGHTS` NOTIFY 응답 → 재부팅까지 확인됨.
+  청크 재조립/CRC/저장 파이프라인이 실기기에서 정상 동작함을 검증 완료.
+- [ ] **USB 상태: 미완료, 보류.** USB Serial(`Serial.readBytes()` 연속 스트림)로 53KB
+  더미 데이터를 보내면 매번 PAYLOAD 수신 도중 타임아웃남 (청크 나눠보내기+타임아웃 5초로
+  늘려도 37,925/53,304에서 실패). ESP32-S3 네이티브 USB CDC가 대용량 연속 전송에서 멈추는
+  알려진 코어 버그([espressif/arduino-esp32#10836](https://github.com/espressif/arduino-esp32/issues/10836))로
+  추정 — USB 프로토콜에 BLE처럼 청크 단위 확인(ACK) 절차가 없는 게 근본 원인일 가능성 높음.
+  Android 앱이 지금 BLE 위주로 가기로 결정(위 Phase 4 참고)해서 지금은 안 고침. 나중에 USB를
+  다시 살리려면 청크마다 짧은 ACK를 주고받는 프로토콜로 바꿔야 함. 코드는 삭제하지 않고 남겨둠.
+- [x] LittleFS 파티션 용량 확인 — 이 펌웨어는 `partitions.csv`가 따로 없어 보드 기본
+  스킴(≈1.4MB LittleFS 파티션)을 그대로 씀. 실측(53,304B 저장 시 `사용 중` 65,536B)
+  기준으로 256KB 요구사항은 이미 여유롭게 충족 — 추가 작업 불필요.
 
 ## Phase 6 — 통합 테스트
 

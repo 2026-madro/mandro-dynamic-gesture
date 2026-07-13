@@ -1,11 +1,14 @@
 package com.mandro.presentation.ui.firmware
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.data.local.UserPreferences
-import com.mandro.domain.repository.EmgRepository
-import com.mandro.domain.repository.UsbRepository
+import com.mandro.domain.model.BleState
+import com.mandro.domain.model.WeightTransferState
+import com.mandro.domain.repository.BleRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +28,7 @@ data class FirmwareCheck(
 
 data class FirmwareUiState(
     val checks: List<FirmwareCheck> = listOf(
-        FirmwareCheck("USB 케이블 연결됨"),
-        FirmwareCheck("암밴드 감지됨"),
+        FirmwareCheck("암밴드 연결됨"),
         FirmwareCheck("내 설정 준비됨"),
     ),
     val isUpdateEnabled: Boolean = false,
@@ -39,41 +41,50 @@ data class FirmwareUiState(
 
 @HiltViewModel
 class FirmwareViewModel @Inject constructor(
-    private val emgRepository: EmgRepository,
-    private val usbRepository: UsbRepository,
+    @ApplicationContext private val context: Context,
+    private val bleRepository: BleRepository,
     private val userPreferences: UserPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FirmwareUiState())
     val uiState = _uiState.asStateFlow()
 
-    private var firmwareFile: File? = null
+    private var weightsFile: File? = null
 
     init {
-        observeUsbState()
+        observeBleState()
+        observeWeightTransferState()
         checkModelReady()
     }
 
-    private fun observeUsbState() {
+    // 암밴드 연결은 다른 화면(수집 화면 등)에서 이미 맺어져 있을 수 있음 —
+    // BleManager가 싱글턴이라 여기서는 그 연결 상태를 관찰만 함.
+    private fun observeBleState() {
         viewModelScope.launch {
-            usbRepository.usbState.collect { state ->
+            bleRepository.bleState.collect { state ->
+                if (state is BleState.Connected) {
+                    setCheckDone(0)
+                    updateEnabled()
+                }
+            }
+        }
+    }
+
+    private fun observeWeightTransferState() {
+        viewModelScope.launch {
+            bleRepository.weightTransferState.collect { state ->
                 when (state) {
-                    is com.mandro.domain.model.UsbState.DeviceDetected -> {
-                        setCheckDone(0)
-                        setCheckDone(1)
-                        updateEnabled()
-                    }
-                    is com.mandro.domain.model.UsbState.Flashing -> {
+                    is WeightTransferState.Sending -> {
                         _uiState.update { it.copy(isUpdating = true) }
                     }
-                    is com.mandro.domain.model.UsbState.Done -> {
-                        _uiState.update { it.copy(isDone = true) }
+                    is WeightTransferState.Done -> {
+                        _uiState.update { it.copy(isUpdating = false, isDone = true) }
                     }
-                    is com.mandro.domain.model.UsbState.Error -> {
+                    is WeightTransferState.Error -> {
                         _uiState.update { it.copy(isUpdating = false, error = state.message) }
-                        Log.e(TAG, "USB 오류: ${state.message}")
+                        Log.e(TAG, "BLE 가중치 전송 오류: ${state.message}")
                     }
-                    else -> {}
+                    is WeightTransferState.Idle -> {}
                 }
             }
         }
@@ -82,12 +93,12 @@ class FirmwareViewModel @Inject constructor(
     private fun checkModelReady() {
         viewModelScope.launch {
             val userId = userPreferences.getUserId() ?: return@launch
-            val session = emgRepository.getLatestSession(userId)
-            if (session != null) {
-                firmwareFile = File(session.firmwarePath)
-                setCheckDone(2)
+            val file = File(context.filesDir, "models/$userId/weights.bin")
+            if (file.exists()) {
+                weightsFile = file
+                setCheckDone(1)
                 updateEnabled()
-                Log.i(TAG, "firmware.bin 준비 완료: ${session.firmwarePath}")
+                Log.i(TAG, "weights.bin 준비 완료: ${file.absolutePath}")
             } else {
                 _uiState.update { it.copy(error = "학습된 모델이 없어요. 학습을 먼저 진행해 주세요.") }
             }
@@ -95,10 +106,10 @@ class FirmwareViewModel @Inject constructor(
     }
 
     fun onStartUpdate() {
-        val file = firmwareFile ?: return
+        val file = weightsFile ?: return
         _uiState.update { it.copy(isUpdating = true, error = null) }
         viewModelScope.launch {
-            usbRepository.flash(file.readBytes(), ByteArray(0))
+            bleRepository.sendWeights(file.readBytes())
                 .onFailure { e ->
                     _uiState.update { it.copy(isUpdating = false, error = e.message) }
                 }

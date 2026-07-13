@@ -93,7 +93,7 @@ private fun FirmwareContent(
                 }
             } else {
                 Text(
-                    text = "USB 케이블로 암밴드를 연결해 주세요",
+                    text = "블루투스로 암밴드에 연결해 주세요",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MandroPalette.Neutral300,
                 )
@@ -182,8 +182,7 @@ private fun FirmwarePreview_AllChecked() {
         FirmwareContent(
             uiState = FirmwareUiState(
                 checks = listOf(
-                    FirmwareCheck("USB 케이블 연결됨", CheckState.DONE),
-                    FirmwareCheck("암밴드 감지됨", CheckState.DONE),
+                    FirmwareCheck("암밴드 연결됨", CheckState.DONE),
                     FirmwareCheck("내 설정 준비됨", CheckState.DONE),
                 ),
                 isUpdateEnabled = true,
@@ -199,8 +198,7 @@ private fun FirmwarePreview_Updating() {
         FirmwareContent(
             uiState = FirmwareUiState(
                 checks = listOf(
-                    FirmwareCheck("USB 케이블 연결됨", CheckState.DONE),
-                    FirmwareCheck("암밴드 감지됨", CheckState.DONE),
+                    FirmwareCheck("암밴드 연결됨", CheckState.DONE),
                     FirmwareCheck("내 설정 준비됨", CheckState.DONE),
                 ),
                 isUpdateEnabled = true,
