@@ -80,11 +80,18 @@ class WaveformViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(bleState = state)
                 when (state) {
                     is BleState.Connected -> {
-                        restCalibration.reset()
+                        // 세션(앱 프로세스) 내에서는 한 번 캘리브레이션한 기준선을
+                        // 재연결돼도 유지함 — 예전엔 연결될 때마다 무조건 리셋해서
+                        // 매번 다시 캘리브레이션해야 했음. 재측정은 사용자가
+                        // startCalibration()을 직접 눌렀을 때만.
                         calibrationBuf.clear()
                         _uiState.value = _uiState.value.copy(
-                            calibration = CalibrationState.Idle,
-                            calibrationProgress = 0f,
+                            calibration = if (restCalibration.isCalibrated) {
+                                CalibrationState.Done
+                            } else {
+                                CalibrationState.Idle
+                            },
+                            calibrationProgress = if (restCalibration.isCalibrated) 1f else 0f,
                         )
                     }
                     is BleState.Disconnected -> _navigateToBleScan.send(Unit)
