@@ -36,8 +36,13 @@ class ClassifyViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ClassifyUiState())
     val uiState = _uiState.asStateFlow()
 
-    // 레이더 차트용 채널별 신호 세기 (0f~1f), Canvas가 직접 읽음
-    val channelValues = FloatArray(EMG_CHANNELS)
+    // 레이더 차트용 — "세기"(느리게 스무딩된 값, 선 길이를 결정)와
+    // "떨림"(세기 대비 순간 편차 히스토리, 선의 흔들림/파형을 결정)을 분리.
+    // 하나의 값으로 합쳐서 쓰면 노이즈 때문에 길이가 계속 요동쳐서 세기를
+    // 읽기 어려웠음 — Canvas가 둘 다 직접 읽음.
+    val channelIntensity = FloatArray(EMG_CHANNELS)
+    val channelJitter = Array(EMG_CHANNELS) { FloatArray(JITTER_HISTORY_SIZE) }
+    private var jitterWriteIdx = 0
 
     init {
         bleRepository.setEmgEnabled(true)
@@ -85,7 +90,7 @@ class ClassifyViewModel @Inject constructor(
         }
     }
 
-    /** raw EMG stream → 레이더 차트 채널 값 업데이트 */
+    /** raw EMG stream → 레이더 차트 채널 값(세기+떨림) 업데이트 */
     private fun observeEmg() {
         viewModelScope.launch {
             bleRepository.emgStream.collect { sample ->
@@ -97,10 +102,23 @@ class ClassifyViewModel @Inject constructor(
                     } else {
                         (raw / 255f).coerceIn(0f, 1f)
                     }
-                    channelValues[ch] += (normalized - channelValues[ch]) * 0.15f
+                    // 세기: 느리게 스무딩 — 이게 선 길이. 노이즈에 덜 흔들리게
+                    // 기존(0.15)보다 훨씬 느린 비율을 씀.
+                    channelIntensity[ch] += (normalized - channelIntensity[ch]) * INTENSITY_SMOOTHING
+                    // 떨림: 세기(안정된 평균)에서 순간값이 얼마나 벗어났는지 —
+                    // 이 편차를 링버퍼에 기록해서 선을 파형처럼 흔들리게 그리는 데 씀.
+                    channelJitter[ch][jitterWriteIdx % JITTER_HISTORY_SIZE] =
+                        (normalized - channelIntensity[ch]).coerceIn(-JITTER_CLAMP, JITTER_CLAMP)
                 }
+                jitterWriteIdx++
             }
         }
+    }
+
+    companion object {
+        private const val INTENSITY_SMOOTHING = 0.03f
+        private const val JITTER_HISTORY_SIZE = 6
+        private const val JITTER_CLAMP = 0.3f
     }
 }
 
