@@ -182,9 +182,6 @@ class CollectViewModel @Inject constructor(
                         windows = windows,
                     )
                     emgRepository.saveTake(userId, take)
-                    emgRepository.uploadTake(userId, take).onFailure { e ->
-                        Log.w("CollectViewModel", "랩 업로드 실패 (재시도 없음): ${e.message}")
-                    }
                 }
             }
         }

@@ -19,7 +19,6 @@ sealed class Screen(val route: String) {
     object Collect     : Screen("training/collect")
     object TrainingProgress : Screen("training/progress")
     object Firmware    : Screen("training/firmware")
-    object History     : Screen("training/history")
 }
 
 // 바텀 내비게이션 탭

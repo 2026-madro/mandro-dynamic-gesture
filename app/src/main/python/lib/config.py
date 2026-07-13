@@ -27,4 +27,10 @@ VAL_RATIO = 0.20
 RANDOM_STATE = 42
 
 WEIGHT_MAGIC = 0xDEADBEEF
-WEIGHT_TOTAL_BYTES = 52_248
+
+# 페이로드 구성: NN 가중치(W0 b0 W1 b1 W2 b2) + StandardScaler(mean, std)
+# 13,062 floats(NN) + 132(mean) + 132(std) = 13,326 floats = 53,304 bytes
+N_FEATURES = 132
+NN_WEIGHT_BYTES = 52_248
+SCALER_BYTES = N_FEATURES * 4 * 2  # mean 132 + std 132, float32
+WEIGHT_TOTAL_BYTES = NN_WEIGHT_BYTES + SCALER_BYTES

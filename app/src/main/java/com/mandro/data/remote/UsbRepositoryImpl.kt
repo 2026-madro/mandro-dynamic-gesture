@@ -29,19 +29,17 @@ private const val TAG = "UsbRepositoryImpl"
 private const val ACTION_USB_PERMISSION = "com.mandro.USB_PERMISSION"
 
 /**
- * 전송 프로토콜 (ESP32 펌웨어와 반드시 일치해야 함):
+ * 전송 프로토콜 (펌웨어 LittleFS 로더와 반드시 일치해야 함):
  *
- * | 필드        | 크기   | 설명                        |
- * |------------|--------|-----------------------------|
- * | MAGIC      | 4 B    | 0x4D 0x44 0x52 0x4F ("MDRO") |
- * | VERSION    | 1 B    | 0x01                        |
- * | MODEL_SIZE | 4 B LE | model.tflite 바이트 수        |
- * | SCAL_SIZE  | 4 B LE | scaler.bin 바이트 수          |
- * | MODEL_DATA | N B    | TFLite 모델 바이너리           |
- * | SCAL_DATA  | M B    | scaler 바이너리               |
- * | CRC32      | 4 B LE | MODEL_DATA + SCAL_DATA 체크섬 |
+ * | 필드      | 크기   | 설명                                          |
+ * |----------|--------|-----------------------------------------------|
+ * | MAGIC    | 4 B LE | 0xDEADBEEF                                     |
+ * | LENGTH   | 4 B LE | payload 바이트 수 (현재 53,304)                  |
+ * | PAYLOAD  | N B    | W0 b0 W1 b1 W2 b2 means stds (float32)          |
+ * | CRC32    | 4 B LE | PAYLOAD 체크섬                                  |
  *
- * ESP32는 수신 완료 후 ACK 1바이트(0xAC)를 반환합니다.
+ * 펌웨어는 PAYLOAD를 LittleFS에 weights.bin으로 저장 후 재부팅하며,
+ * 수신 완료 시 ACK 1바이트(0xAC)를 반환한다.
  */
 @Singleton
 class UsbRepositoryImpl @Inject constructor(
@@ -57,9 +55,8 @@ class UsbRepositoryImpl @Inject constructor(
     private val ESPRESSIF_VID = 0x303A
     private val ESP32S3_PID   = 0x1001
 
-    private val MAGIC   = byteArrayOf(0x4D, 0x44, 0x52, 0x4F.toByte()) // "MDRO"
-    private val VERSION = byteArrayOf(0x01)
-    private val ACK     = 0xAC.toByte()
+    private val MAGIC = 0xDEADBEEF.toInt()
+    private val ACK   = 0xAC.toByte()
 
     private val BULK_TIMEOUT_MS = 5_000
     private val CHUNK_SIZE      = 16_384  // 16 KB 단위 전송
@@ -104,7 +101,7 @@ class UsbRepositoryImpl @Inject constructor(
 
     // ── 플래시 진입점 ───────────────────────────────────────────
 
-    override suspend fun flash(modelBytes: ByteArray, scalerBytes: ByteArray): Result<Unit> {
+    override suspend fun flash(weightsBytes: ByteArray): Result<Unit> {
         val device = findEsp32Device()
             ?: return Result.failure(IllegalStateException("ESP32-S3 기기를 찾을 수 없어요. USB 케이블을 확인해 주세요."))
 
@@ -120,7 +117,7 @@ class UsbRepositoryImpl @Inject constructor(
 
             try {
                 val (bulkOut, bulkIn) = findBulkEndpoints(device, connection)
-                sendPayload(connection, bulkOut, bulkIn, modelBytes, scalerBytes)
+                sendPayload(connection, bulkOut, bulkIn, weightsBytes)
             } finally {
                 connection.close()
             }
@@ -195,40 +192,33 @@ class UsbRepositoryImpl @Inject constructor(
         conn: UsbDeviceConnection,
         bulkOut: UsbEndpoint,
         bulkIn: UsbEndpoint,
-        modelBytes: ByteArray,
-        scalerBytes: ByteArray,
+        payload: ByteArray,
     ) {
-        val totalPayload = modelBytes.size + scalerBytes.size
-
-        // ── 헤더 전송 ─────────────────────────────────────────────
-        val header = ByteBuffer.allocate(14).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put(MAGIC)                         // 4B
-            put(VERSION)                       // 1B
-            putInt(modelBytes.size)            // 4B
-            putInt(scalerBytes.size)           // 4B
+        // ── 헤더 전송 (MAGIC + LENGTH) ────────────────────────────
+        val header = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putInt(MAGIC)
+            putInt(payload.size)
         }.array()
 
         bulkWrite(conn, bulkOut, header)
-        Log.d(TAG, "헤더 전송 완료: model=${modelBytes.size}B scaler=${scalerBytes.size}B")
+        Log.d(TAG, "헤더 전송 완료: payload=${payload.size}B")
 
-        // ── 데이터 청크 전송 ─────────────────────────────────────
+        // ── 페이로드 청크 전송 ───────────────────────────────────
         var sent = 0
-        for (data in listOf(modelBytes, scalerBytes)) {
-            var offset = 0
-            while (offset < data.size) {
-                val chunkEnd = minOf(offset + CHUNK_SIZE, data.size)
-                bulkWrite(conn, bulkOut, data.copyOfRange(offset, chunkEnd))
-                sent += chunkEnd - offset
-                offset = chunkEnd
+        var offset = 0
+        while (offset < payload.size) {
+            val chunkEnd = minOf(offset + CHUNK_SIZE, payload.size)
+            bulkWrite(conn, bulkOut, payload.copyOfRange(offset, chunkEnd))
+            sent += chunkEnd - offset
+            offset = chunkEnd
 
-                val progress = (sent * 100 / totalPayload)
-                _usbState.value = UsbState.Flashing(progress)
-                Log.d(TAG, "전송 중: $sent / $totalPayload bytes ($progress%)")
-            }
+            val progress = (sent * 100 / payload.size)
+            _usbState.value = UsbState.Flashing(progress)
+            Log.d(TAG, "전송 중: $sent / ${payload.size} bytes ($progress%)")
         }
 
         // ── CRC32 체크섬 전송 ─────────────────────────────────────
-        val crc = CRC32().apply { update(modelBytes); update(scalerBytes) }
+        val crc = CRC32().apply { update(payload) }
         val crcBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(crc.value.toInt()).array()
         bulkWrite(conn, bulkOut, crcBytes)

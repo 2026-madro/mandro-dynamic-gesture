@@ -4,8 +4,8 @@ training_local.py
 Chaquopy를 통해 Kotlin에서 호출되는 로컬 학습 엔트리 포인트.
 전처리/피처추출/윈도잉 로직은 lib/ 이하 모듈에서 가져다 쓴다 (mandro-backend와 동일 구조).
 
-가중치 직렬화 순서는 펌웨어(nn.cpp loadFromSPIFFS)와 반드시 일치해야 함:
-    W0(132x64) b0(64) W1(64x64) b1(64) W2(64x6) b2(6) = 52,248 bytes
+가중치 직렬화 순서는 펌웨어(LittleFS 로더)와 반드시 일치해야 함:
+    W0(132x64) b0(64) W1(64x64) b1(64) W2(64x6) b2(6) means(132) stds(132) = 53,304 bytes
 """
 
 import traceback
@@ -32,7 +32,7 @@ def run_training_local(emg_bytes: bytes, labels_bytes: bytes) -> bytes:
     Returns
     -------
     bytes
-        직렬화된 가중치 바이너리 (52,248 bytes). BLE/USB 전송 프로토콜에
+        직렬화된 가중치+스케일러 바이너리 (53,304 bytes). BLE/USB 전송 프로토콜에
         얹기 전 단계의 payload (매직넘버/CRC는 Kotlin 쪽 전송 코드에서 붙임).
     """
     try:
@@ -42,7 +42,7 @@ def run_training_local(emg_bytes: bytes, labels_bytes: bytes) -> bytes:
         X, y = preprocess_and_extract(raw_emg, labels)
         model, scaler = fit_local_model(X, y)
 
-        return serialize_weights(model)
+        return serialize_weights(model, scaler)
     except Exception as e:
         print(f"Error during local training: {str(e)}")
         traceback.print_exc()

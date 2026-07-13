@@ -1,9 +1,11 @@
 package com.mandro.di
 
-import com.mandro.data.remote.EmgRepositoryImpl
-import com.mandro.data.remote.UserRepositoryImpl
+import com.mandro.data.local.EmgRepositoryImpl
+import com.mandro.data.local.LocalTrainingRepositoryImpl
+import com.mandro.data.local.UserRepositoryImpl
 import com.mandro.data.remote.UsbRepositoryImpl
 import com.mandro.domain.repository.EmgRepository
+import com.mandro.domain.repository.LocalTrainingRepository
 import com.mandro.domain.repository.UserRepository
 import com.mandro.domain.repository.UsbRepository
 import dagger.Binds
@@ -27,4 +29,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindUsbRepository(impl: UsbRepositoryImpl): UsbRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalTrainingRepository(impl: LocalTrainingRepositoryImpl): LocalTrainingRepository
 }
