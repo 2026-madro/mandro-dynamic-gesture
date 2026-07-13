@@ -28,10 +28,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             buildConfigField("Boolean", "USE_MOCK_BLE", "false")
-            buildConfigField("String", "BASE_URL", "\"https://api.mandro.com/\"") // 예시 운영 서버 주소
         }
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://127.0.0.1:8000/\"") // adb reverse로 PC localhost 터널링
             buildConfigField("Boolean", "USE_MOCK_BLE", "false")
         }
     }
@@ -62,6 +60,7 @@ chaquopy {
             install("numpy")
             install("scipy")
             install("scikit-learn")
+            install("pandas")
         }
     }
 }
@@ -86,11 +85,6 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
-
-    // ── 네트워크 ──────────────────────────────────────────────
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.gson)
-    implementation(libs.okhttp.logging)
 
     // ── 로컬 DB: Room ─────────────────────────────────────────
     implementation(libs.room.runtime)
