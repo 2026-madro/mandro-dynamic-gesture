@@ -39,6 +39,9 @@ class HomeViewModel @Inject constructor(
     private val _navigateToBleScan = Channel<Unit>(Channel.BUFFERED)
     val navigateToBleScan = _navigateToBleScan.receiveAsFlow()
 
+    private val _navigateToFirmware = Channel<Unit>(Channel.BUFFERED)
+    val navigateToFirmware = _navigateToFirmware.receiveAsFlow()
+
     init {
         loadUsers()
         observeBleState()
@@ -76,6 +79,15 @@ class HomeViewModel @Inject constructor(
             } else {
                 _navigateToBleScan.send(Unit)
             }
+        }
+    }
+
+    // 이미 학습된 모델(weights.bin)이 있는 유저를 선택하고 곧바로 가중치 업데이트
+    // 화면으로 이동 — 매번 재녹화/재학습 없이 저장된 모델을 다시 보낼 때 씀.
+    fun onResendWeights(user: User) {
+        viewModelScope.launch {
+            userPreferences.saveUserId(user.id)
+            _navigateToFirmware.send(Unit)
         }
     }
 

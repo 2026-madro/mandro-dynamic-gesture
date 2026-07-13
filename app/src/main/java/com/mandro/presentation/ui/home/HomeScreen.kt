@@ -41,6 +41,7 @@ fun HomeScreen(
     onUserSelected: () -> Unit = {},
     onAddUser: () -> Unit = {},
     onConnectBand: () -> Unit = {},
+    onResendWeights: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -49,6 +50,9 @@ fun HomeScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.navigateToBleScan.collect { onConnectBand() }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.navigateToFirmware.collect { onResendWeights() }
     }
 
     if (uiState.error != null) {
@@ -67,6 +71,7 @@ fun HomeScreen(
         onUserClick = viewModel::onUserSelected,
         onAddUser = onAddUser,
         onConnectBand = viewModel::onConnectBand,
+        onResendWeightsClick = viewModel::onResendWeights,
     )
 }
 
@@ -76,6 +81,7 @@ private fun HomeContent(
     onUserClick: (User) -> Unit,
     onAddUser: () -> Unit,
     onConnectBand: () -> Unit,
+    onResendWeightsClick: (User) -> Unit = {},
 ) {
     Scaffold(
         containerColor = MandroPalette.Neutral50,
@@ -123,7 +129,11 @@ private fun HomeContent(
                 }
 
                 items(uiState.users) { user ->
-                    UserCard(user = user, onClick = { onUserClick(user) })
+                    UserCard(
+                        user = user,
+                        onClick = { onUserClick(user) },
+                        onResendWeightsClick = { onResendWeightsClick(user) },
+                    )
                 }
 
                 item {
@@ -180,7 +190,11 @@ private fun BandConnectionCard(bleState: BleState) {
 }
 
 @Composable
-fun UserCard(user: User, onClick: () -> Unit) {
+fun UserCard(
+    user: User,
+    onClick: () -> Unit,
+    onResendWeightsClick: () -> Unit = {},
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MandroPalette.White,
@@ -220,6 +234,15 @@ fun UserCard(user: User, onClick: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = if (user.hasModel) MandroPalette.Success600 else MandroPalette.Neutral500,
                 )
+            }
+            if (user.hasModel) {
+                TextButton(onClick = onResendWeightsClick) {
+                    Text(
+                        text = "가중치 재전송",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MandroPalette.Primary600,
+                    )
+                }
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,

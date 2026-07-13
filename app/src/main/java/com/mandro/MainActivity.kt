@@ -36,7 +36,6 @@ import com.mandro.presentation.ui.user.UserScreen
 import com.mandro.presentation.ui.classify.ClassifyScreen
 import com.mandro.presentation.ui.collect.CollectScreen
 import com.mandro.presentation.ui.firmware.FirmwareScreen
-import com.mandro.presentation.ui.history.HistoryScreen
 import com.mandro.presentation.ui.settings.SettingsScreen
 import com.mandro.presentation.ui.training.TrainingProgressScreen
 import com.mandro.presentation.ui.waveform.WaveformScreen
@@ -132,6 +131,9 @@ class MainActivity : ComponentActivity() {
                                 onConnectBand = {
                                     navController.navigate(Screen.BleScan.route)
                                 },
+                                onResendWeights = {
+                                    navController.navigate(Screen.Firmware.route)
+                                },
                             )
                         }
                         composable(Screen.UserCreate.route) {
@@ -144,7 +146,14 @@ class MainActivity : ComponentActivity() {
                             BleScreen(
                                 onBack = { navController.popBackStack() },
                                 onConnected = {
-                                    navController.navigate(Screen.Waveform.route)
+                                    // Firmware(가중치 재전송 지름길)에서 연결하러 온 거면
+                                    // 다시 Firmware로 돌아감. 그 외(홈/유저생성 등에서 온
+                                    // 최초 연결)에는 기존처럼 파형 화면으로 진행.
+                                    if (navController.previousBackStackEntry?.destination?.route == Screen.Firmware.route) {
+                                        navController.popBackStack()
+                                    } else {
+                                        navController.navigate(Screen.Waveform.route)
+                                    }
                                 },
                             )
                         }
@@ -191,17 +200,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onGoHistory = {
-                                    navController.navigate(Screen.History.route)
-                                },
-                            )
-                        }
-                        composable(Screen.History.route) {
-                            HistoryScreen(
-                                onBack = { navController.popBackStack() },
-                                onSessionChosen = {
-                                    navController.navigate(Screen.Firmware.route)
-                                },
                             )
                         }
                         composable(Screen.Guide.route) {
@@ -238,9 +236,27 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Firmware.route) {
                             FirmwareScreen(
                                 onDone = {
-                                    navController.navigate(Screen.Classify.route) {
-                                        popUpTo(Screen.Training.route)
+                                    // Firmware는 정상 학습 플로우(Training 경유)뿐 아니라 홈의
+                                    // "가중치 재전송" 지름길로도 올 수 있음. Screen.Training도
+                                    // 그래프 시작점(Splash, 진입 즉시 자기 자신을 백스택에서
+                                    // 지움)도 지름길 경로에선 백스택에 없을 수 있어서 둘 다
+                                    // popUpTo 타깃으로 못 씀 — 실제 백스택을 직접 확인해서
+                                    // Training이 있으면 거기까지 정리, 없으면 Firmware
+                                    // 자기 자신만 지움 (Firmware는 지금 이 화면이라 항상
+                                    // 백스택에 존재가 보장됨).
+                                    val hasTrainingInStack = navController.currentBackStack.value.any {
+                                        it.destination.route == Screen.Training.route
                                     }
+                                    navController.navigate(Screen.Classify.route) {
+                                        if (hasTrainingInStack) {
+                                            popUpTo(Screen.Training.route)
+                                        } else {
+                                            popUpTo(Screen.Firmware.route) { inclusive = true }
+                                        }
+                                    }
+                                },
+                                onConnectBand = {
+                                    navController.navigate(Screen.BleScan.route)
                                 },
                             )
                         }
