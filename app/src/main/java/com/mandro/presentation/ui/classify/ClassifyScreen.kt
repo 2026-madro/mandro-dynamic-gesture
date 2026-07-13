@@ -16,6 +16,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mandro.domain.model.BleState
 import com.mandro.presentation.components.ConnectionBadge
 import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
@@ -32,8 +33,18 @@ private val CHANNEL_ANGLES_RAD = CHANNEL_ANGLES_DEG.map { Math.toRadians(it.toDo
 fun ClassifyScreen(
     viewModel: ClassifyViewModel = hiltViewModel(),
     onRelearn: () -> Unit = {},
+    onDisconnected: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 가중치 전송 성공 후 암밴드가 재부팅하며 연결이 끊기는 경우를 감지해서
+    // BleScan으로 돌려보냄 (WaveformScreen과 동일한 패턴). hasConnectedOnce로
+    // "화면 진입 직후 아직 연결 확인 전"인 상태와 구분함.
+    LaunchedEffect(uiState.bleState, uiState.hasConnectedOnce) {
+        if (uiState.hasConnectedOnce && uiState.bleState is BleState.Disconnected) {
+            onDisconnected()
+        }
+    }
 
     ClassifyContent(
         uiState = uiState,

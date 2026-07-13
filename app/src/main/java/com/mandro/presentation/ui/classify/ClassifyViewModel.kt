@@ -18,6 +18,11 @@ data class ClassifyUiState(
     val gesture: String = "—",
     val gestureKo: String = "암밴드 연결을 기다리는 중...",
     val bleState: BleState = BleState.Disconnected,
+    // 이 화면에서 한 번이라도 Connected를 본 적 있는지 — 화면 진입 직후의
+    // "아직 연결 확인 전" 상태와 "연결됐다가 끊긴" 상태를 구분하기 위함.
+    // 가중치 전송 성공 후 암밴드가 재부팅하면서 연결이 끊기는 경우를 감지해서
+    // BleScan 화면으로 돌려보내는 데 씀 (ClassifyScreen의 onDisconnected).
+    val hasConnectedOnce: Boolean = false,
     val probabilities: Map<String, Float> = emptyMap(),
     val error: String? = null,
 )
@@ -49,9 +54,17 @@ class ClassifyViewModel @Inject constructor(
     private fun observeBleState() {
         viewModelScope.launch {
             bleRepository.bleState.collect { state ->
-                _uiState.update { it.copy(bleState = state) }
-                if (state is BleState.Connected) {
-                    _uiState.update { it.copy(gestureKo = "동작을 인식할 준비가 됐어요") }
+                _uiState.update {
+                    it.copy(
+                        bleState = state,
+                        hasConnectedOnce = it.hasConnectedOnce || state is BleState.Connected,
+                        gestureKo = when {
+                            state is BleState.Connected -> "동작을 인식할 준비가 됐어요"
+                            state is BleState.Disconnected && it.hasConnectedOnce ->
+                                "암밴드 연결이 끊겼어요. 다시 연결해 주세요."
+                            else -> it.gestureKo
+                        },
+                    )
                 }
             }
         }

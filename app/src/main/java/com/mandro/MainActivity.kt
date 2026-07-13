@@ -175,6 +175,11 @@ class MainActivity : ComponentActivity() {
                                 onRelearn = {
                                     navController.navigate(Screen.Training.route)
                                 },
+                                onDisconnected = {
+                                    navController.navigate(Screen.BleScan.route) {
+                                        popUpTo(Screen.BleScan.route) { inclusive = true }
+                                    }
+                                },
                             )
                         }
                         composable(Screen.Settings.route) {

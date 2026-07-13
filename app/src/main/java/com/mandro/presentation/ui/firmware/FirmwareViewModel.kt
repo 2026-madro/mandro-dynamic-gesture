@@ -51,6 +51,12 @@ class FirmwareViewModel @Inject constructor(
 
     private var weightsFile: File? = null
 
+    // weightTransferState는 BleManager 싱글턴에 남아있는 "마지막 전송 결과"를
+    // 그대로 들고 있음 — 이 화면을 새로 열었을 때 이전 세션의 Done/Error가
+    // 남아있으면 바로 그걸 보고 반응해버리는 걸 막기 위한 가드.
+    // onStartUpdate()를 실제로 호출한 뒤부터만 상태 변화에 반응한다.
+    private var transferStarted = false
+
     init {
         observeBleState()
         observeWeightTransferState()
@@ -73,6 +79,7 @@ class FirmwareViewModel @Inject constructor(
     private fun observeWeightTransferState() {
         viewModelScope.launch {
             bleRepository.weightTransferState.collect { state ->
+                if (!transferStarted) return@collect
                 when (state) {
                     is WeightTransferState.Sending -> {
                         _uiState.update { it.copy(isUpdating = true) }
@@ -107,6 +114,7 @@ class FirmwareViewModel @Inject constructor(
 
     fun onStartUpdate() {
         val file = weightsFile ?: return
+        transferStarted = true
         _uiState.update { it.copy(isUpdating = true, error = null) }
         viewModelScope.launch {
             bleRepository.sendWeights(file.readBytes())
