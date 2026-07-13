@@ -34,6 +34,7 @@ data class FirmwareUiState(
     val isUpdateEnabled: Boolean = false,
     val isUpdating: Boolean = false,
     val isDone: Boolean = false,
+    val isBleConnected: Boolean = false,
     val error: String? = null,
 ) {
     val allChecked: Boolean get() = checks.all { it.state == CheckState.DONE }
@@ -64,14 +65,16 @@ class FirmwareViewModel @Inject constructor(
     }
 
     // 암밴드 연결은 다른 화면(수집 화면 등)에서 이미 맺어져 있을 수 있음 —
-    // BleManager가 싱글턴이라 여기서는 그 연결 상태를 관찰만 함.
+    // BleManager가 싱글턴이라 여기서는 그 연결 상태를 관찰만 함. 연결이 끊기면
+    // 체크도 다시 PENDING으로 되돌려서(연결됐다가 끊긴 경우 화면이 계속 "연결됨"으로
+    // 잘못 표시되지 않도록), 안 연결된 상태면 UI에서 연결 버튼을 보여줄 수 있게 함.
     private fun observeBleState() {
         viewModelScope.launch {
             bleRepository.bleState.collect { state ->
-                if (state is BleState.Connected) {
-                    setCheckDone(0)
-                    updateEnabled()
-                }
+                val connected = state is BleState.Connected
+                setCheckState(0, connected)
+                _uiState.update { it.copy(isBleConnected = connected) }
+                updateEnabled()
             }
         }
     }
@@ -103,7 +106,7 @@ class FirmwareViewModel @Inject constructor(
             val file = File(context.filesDir, "models/$userId/weights.bin")
             if (file.exists()) {
                 weightsFile = file
-                setCheckDone(1)
+                setCheckState(1, true)
                 updateEnabled()
                 Log.i(TAG, "weights.bin 준비 완료: ${file.absolutePath}")
             } else {
@@ -124,10 +127,10 @@ class FirmwareViewModel @Inject constructor(
         }
     }
 
-    private fun setCheckDone(index: Int) {
+    private fun setCheckState(index: Int, done: Boolean) {
         _uiState.update { state ->
             state.copy(checks = state.checks.mapIndexed { i, check ->
-                if (i == index) check.copy(state = CheckState.DONE) else check
+                if (i == index) check.copy(state = if (done) CheckState.DONE else CheckState.PENDING) else check
             })
         }
     }

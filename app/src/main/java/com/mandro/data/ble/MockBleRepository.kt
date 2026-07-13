@@ -5,6 +5,7 @@ import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.EmgSample
 import com.mandro.domain.model.InferenceResult
+import com.mandro.domain.model.WeightTransferState
 import com.mandro.domain.repository.BleRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,9 @@ class MockBleRepository @Inject constructor() : BleRepository {
     private val _inferenceStream = MutableSharedFlow<InferenceResult>(replay = 1)
     override val inferenceStream: Flow<InferenceResult> = _inferenceStream.asSharedFlow()
 
+    private val _weightTransferState = MutableStateFlow<WeightTransferState>(WeightTransferState.Idle)
+    override val weightTransferState: Flow<WeightTransferState> = _weightTransferState.asStateFlow()
+
     private val mockDevices = listOf(
         BleDevice("ESP32S3_FAST_BLE", "00:11:22:33:44:55", -55),
         BleDevice("ESP32S3_FAST_BLE", "00:11:22:33:44:66", -72),
@@ -67,6 +71,16 @@ class MockBleRepository @Inject constructor() : BleRepository {
     }
 
     override fun setEmgEnabled(enabled: Boolean) {}  // Mock에서는 항상 emit
+
+    override suspend fun sendWeights(weightsBytes: ByteArray): Result<Unit> {
+        _weightTransferState.value = WeightTransferState.Sending(0)
+        for (percent in 20..100 step 20) {
+            delay(150L)
+            _weightTransferState.value = WeightTransferState.Sending(percent)
+        }
+        _weightTransferState.value = WeightTransferState.Done
+        return Result.success(Unit)
+    }
 
     // 64Hz Notify 시뮬레이션 — 패킷당 20샘플, uint8 범위(0~255)
     private fun startMockEmgStream() {

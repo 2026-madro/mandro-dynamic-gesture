@@ -27,6 +27,7 @@ import com.mandro.presentation.theme.MandroTheme
 fun FirmwareScreen(
     viewModel: FirmwareViewModel = hiltViewModel(),
     onDone: () -> Unit = {},
+    onConnectBand: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -38,6 +39,7 @@ fun FirmwareScreen(
     FirmwareContent(
         uiState = uiState,
         onStartUpdate = viewModel::onStartUpdate,
+        onConnectBand = onConnectBand,
     )
 }
 
@@ -45,6 +47,7 @@ fun FirmwareScreen(
 private fun FirmwareContent(
     uiState: FirmwareUiState,
     onStartUpdate: () -> Unit = {},
+    onConnectBand: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -132,7 +135,16 @@ private fun FirmwareContent(
 
         Spacer(Modifier.weight(1f))
 
-        // 버튼
+        // 버튼 — 암밴드 연결이 안 돼있으면 업데이트 대신 연결부터 하도록 안내
+        // (녹화/학습 없이 저장된 모델을 바로 재전송할 때는 BLE 연결이 안 맺어져
+        // 있는 상태로 이 화면에 곧바로 올 수 있어서 필요함)
+        if (!uiState.isBleConnected) {
+            MandroSecondaryButton(
+                text = "암밴드 연결하기",
+                onClick = onConnectBand,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         MandroPrimaryButton(
             text = "업데이트 시작",
             onClick = onStartUpdate,
