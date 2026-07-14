@@ -48,7 +48,7 @@ private const val JITTER_CLAMP = 0.3f
 // 제곱근(감마<1)을 씌워서 낮은 쪽을 한 번 더 밀어올림. 두 방식을 합쳐야
 // "낮은 신호도 조금만 커지면 눈에 띄게 커지는" 반응이 나옴.
 // (실제 값 자체는 안 바꾸고 그리는 길이만 이 커브를 거침)
-private const val INTENSITY_GAIN = 5f
+private const val INTENSITY_GAIN = 15f
 private const val INTENSITY_GAMMA = 0.5f
 
 @Composable
