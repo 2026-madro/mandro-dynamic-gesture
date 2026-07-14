@@ -42,15 +42,16 @@ object MandroPalette {
     val DarkSurf   = Color(0xFF1A2131)
     val DarkBorder = Color(0xFF2E384D)
 
-    // 8채널 파형 색상
-    val WaveCH0 = Color(0xFF3DC78F)
-    val WaveCH1 = Color(0xFF5CA3FA)
-    val WaveCH2 = Color(0xFFFABC38)
-    val WaveCH3 = Color(0xFFED6B6B)
-    val WaveCH4 = Color(0xFFC785FA)
-    val WaveCH5 = Color(0xFFFB9438)
-    val WaveCH6 = Color(0xFF52E0EB)
-    val WaveCH7 = Color(0xFFEBE052)
+    // 8채널 파형 색상 — 무지개 순서 (빨→주황→노랑→초록→시안→파랑→보라→
+    // 핑크/자주 → 다시 빨강으로 자연스럽게 이어짐)
+    val WaveCH0 = Color(0xFFE44444)  // 빨강
+    val WaveCH1 = Color(0xFFED8C1D)  // 주황 (진하게 — 노랑과 헷갈리지 않도록 채도↑, 명도↓)
+    val WaveCH2 = Color(0xFFE4DC44)  // 노랑
+    val WaveCH3 = Color(0xFF44E46C)  // 초록
+    val WaveCH4 = Color(0xFF44E4E4)  // 시안
+    val WaveCH5 = Color(0xFF446CE4)  // 파랑
+    val WaveCH6 = Color(0xFF9444E4)  // 보라
+    val WaveCH7 = Color(0xFFE444BC)  // 핑크/자주
 
     val waveColors = listOf(WaveCH0, WaveCH1, WaveCH2, WaveCH3, WaveCH4, WaveCH5, WaveCH6, WaveCH7)
 }
