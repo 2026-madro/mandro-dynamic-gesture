@@ -29,9 +29,11 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 // 8채널 축 각도: 좌우 각 4개씩 대칭 배치 (단위: 라디안)
-// Y축(좌우) 반전 적용됨: CH0~3(원래 오른쪽) → 왼쪽, CH4~7(원래 왼쪽) → 오른쪽
-// (angle → 180° - angle 변환)
-private val CHANNEL_ANGLES_DEG = floatArrayOf(-120f, -150f, 150f, 120f, 60f, 30f, -30f, -60f)
+// 물리적 각도 슬롯 8개(-120,-150,150,120,60,30,-30,-60)는 그대로 두고,
+// 어느 채널이 어느 슬롯에 앉을지만 재배치함 — 암밴드를 실제로 착용했을 때
+// 2사분면에서 시계 반대방향으로 도는 순서가 0,1,2,...,7이 아니라
+// 3,2,1,0,7,6,5,4라서, 그 순서에 맞춰 채널 인덱스를 슬롯에 재할당.
+private val CHANNEL_ANGLES_DEG = floatArrayOf(120f, 150f, -150f, -120f, -60f, -30f, 30f, 60f)
 private val CHANNEL_ANGLES_RAD = CHANNEL_ANGLES_DEG.map { Math.toRadians(it.toDouble()).toFloat() }.toFloatArray()
 
 // 채널 간 최소 각도 간격은 30° — 떨림으로 인한 각도 변화폭을 그 절반보다
