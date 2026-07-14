@@ -96,19 +96,23 @@ class ClassifyViewModel @Inject constructor(
             bleRepository.emgStream.collect { sample ->
                 for (ch in 0 until EMG_CHANNELS) {
                     val raw = sample.channels[ch]
-                    val normalized = if (restCalibration.isCalibrated) {
+                    // 0~1로 clamp하기 전의 편차 — 음수도 그대로 유지해야 떨림이
+                    // 한쪽(양수) 방향으로만 쏠리지 않음 (clamp된 값으로 떨림을
+                    // 계산하면 음수 쪽이 -channelIntensity에서 인위적으로 막혀버림).
+                    val rawDeviation = if (restCalibration.isCalibrated) {
                         val baseline = restCalibration.baseline[ch]
-                        ((raw - baseline) / (255f - baseline).coerceAtLeast(1f)).coerceIn(0f, 1f)
+                        (raw - baseline) / (255f - baseline).coerceAtLeast(1f)
                     } else {
-                        (raw / 255f).coerceIn(0f, 1f)
+                        raw / 255f
                     }
+                    val normalized = rawDeviation.coerceIn(0f, 1f)
                     // 세기: 느리게 스무딩 — 이게 선 길이. 노이즈에 덜 흔들리게
-                    // 기존(0.15)보다 훨씬 느린 비율을 씀.
+                    // 기존(0.15)보다 훨씬 느린 비율을 씀. clamp된 값 기준.
                     channelIntensity[ch] += (normalized - channelIntensity[ch]) * INTENSITY_SMOOTHING
                     // 떨림: 세기(안정된 평균)에서 순간값이 얼마나 벗어났는지 —
-                    // 이 편차를 링버퍼에 기록해서 선을 파형처럼 흔들리게 그리는 데 씀.
+                    // clamp 전 값 기준이라 평균보다 낮은 쪽도 정직하게 음수로 나옴.
                     channelJitter[ch][jitterWriteIdx % JITTER_HISTORY_SIZE] =
-                        (normalized - channelIntensity[ch]).coerceIn(-JITTER_CLAMP, JITTER_CLAMP)
+                        (rawDeviation - channelIntensity[ch]).coerceIn(-JITTER_CLAMP, JITTER_CLAMP)
                 }
                 jitterWriteIdx++
             }
@@ -117,7 +121,7 @@ class ClassifyViewModel @Inject constructor(
 
     companion object {
         private const val INTENSITY_SMOOTHING = 0.03f
-        private const val JITTER_HISTORY_SIZE = 6
+        private const val JITTER_HISTORY_SIZE = 40
         private const val JITTER_CLAMP = 0.3f
     }
 }

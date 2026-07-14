@@ -25,6 +25,7 @@ import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 
 // 8채널 축 각도: 좌우 각 4개씩 대칭 배치 (단위: 라디안)
@@ -39,10 +40,16 @@ private val MAX_ANGLE_DEVIATION_RAD = Math.toRadians(10.0).toFloat()
 // ClassifyViewModel.JITTER_CLAMP와 맞춰야 함 (거기서 이 범위로 클램프해서 넘어옴)
 private const val JITTER_CLAMP = 0.3f
 
-// intensity(0~1)를 화면에 그대로 그리면 세게 힘줘도 작게 보여서, 시각적으로만
-// 증폭함 (실제 값 자체는 안 바꾸고 그리는 길이만 키움). 1.0에서 클램프해서
-// 차트 밖으로 나가진 않게 함.
+// intensity(0~1)를 화면에 그대로 그리면 실제 신호가 낮은 대역(대략 0.04~0.2)에
+// 몰려 있어서 세게 힘줘도 작게 보임. 그렇다고 선형 배율(×GAIN)만 쓰면 낮은
+// 대역 전체를 고르게 늘릴 뿐이라 그 안에서의 크기 차이가 잘 안 보이고, 반대로
+// 거듭제곱 커브(감마<1)만 쓰면 실측 대역(0.04 이상)에서는 오히려 선형 배율보다
+// 작게 나옴 — 그래서 먼저 ×GAIN으로 키워서 1.0 이하로 clamp한 다음, 그 위에
+// 제곱근(감마<1)을 씌워서 낮은 쪽을 한 번 더 밀어올림. 두 방식을 합쳐야
+// "낮은 신호도 조금만 커지면 눈에 띄게 커지는" 반응이 나옴.
+// (실제 값 자체는 안 바꾸고 그리는 길이만 이 커브를 거침)
 private const val INTENSITY_GAIN = 5f
+private const val INTENSITY_GAMMA = 0.5f
 
 @Composable
 fun ClassifyScreen(
@@ -169,7 +176,7 @@ private fun ClassifyContent(
                 val intensity = channelIntensity[ch].coerceIn(0f, 1f)
                 if (intensity < 0.02f) return@forEachIndexed
 
-                val length = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f)
+                val length = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
                 val jitter = channelJitter[ch]
                 val path = Path().apply {
                     moveTo(cx, cy)
