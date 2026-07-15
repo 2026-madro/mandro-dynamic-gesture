@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mandro.domain.model.BleState
+import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.presentation.components.ConnectionBadge
 import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
@@ -59,7 +60,9 @@ private const val INTENSITY_GAMMA = 0.5f
 // 있다는 걸 항상 확인할 수 있어야 함.
 private const val LOW_SIGNAL_THRESHOLD = 0.02f
 private const val LOW_SIGNAL_ALPHA = 0.25f
-private const val MIN_STUB_RADIUS_RATIO = 0.06f
+// 길이가 짧을 때(rest 근처)는 각도 흔들림도 비례해서 줄임 — 안 그러면 짧은 길이
+// 대비 각도 흔들림 폭이 상대적으로 훨씬 커 보여서 산만해짐.
+private const val STUB_ANGLE_DEVIATION_SCALE = 0.4f
 
 @Composable
 fun ClassifyScreen(
@@ -82,6 +85,7 @@ fun ClassifyScreen(
         uiState = uiState,
         channelIntensity = viewModel.channelIntensity,
         channelJitter = viewModel.channelJitter,
+        channelHasSignal = viewModel.channelHasSignal,
         onRelearn = onRelearn,
     )
 }
@@ -91,6 +95,7 @@ private fun ClassifyContent(
     uiState: ClassifyUiState,
     channelIntensity: FloatArray,
     channelJitter: Array<FloatArray>,
+    channelHasSignal: BooleanArray = BooleanArray(EMG_CHANNELS) { true },
     onRelearn: () -> Unit,
 ) {
     var frameCount by remember { mutableLongStateOf(0L) }
@@ -184,27 +189,35 @@ private fun ClassifyContent(
             // 침범하지 않도록 함 (거리로 표현하면 멀어질수록 옆으로 크게 새어나감).
             CHANNEL_ANGLES_RAD.forEachIndexed { ch, angle ->
                 val intensity = channelIntensity[ch].coerceIn(0f, 1f)
-                val hasSignal = intensity >= LOW_SIGNAL_THRESHOLD
+                val isActive = intensity >= LOW_SIGNAL_THRESHOLD
 
-                // 임계값 미만이어도 완전히 숨기지 않고 짧고 옅은 선으로 "신호는
-                // 들어오고 있다"를 표시 (WaveformScreen.kt의 alpha 처리와 동일한 패턴)
-                val length = if (hasSignal) {
-                    maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
-                } else {
-                    maxRadius * MIN_STUB_RADIUS_RATIO
-                }
-                val lineColor = if (hasSignal) {
+                // 길이 = "근육이 활성 상태인가"(baseline 대비 편차, channelIntensity).
+                // rest에서 0에 가까운 게 정상 — 실제 값이 작으면 짧게, 가짜 최소
+                // 길이로 채우지 않음 (고정값을 넣으면 "이게 진짜 신호인지 디폴트인지"
+                // 헷갈림 — 신호가 살아있다는 건 길이가 아니라 색상(channelHasSignal)로
+                // 전달함).
+                val length = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
+                // 색상/alpha = "센서가 실제로 데이터를 보내고 있는가"(raw 값 자체의
+                // 흔들림, channelHasSignal — baseline 보정과 무관). 이걸 intensity와
+                // 분리해야, rest처럼 intensity가 의도적으로 0에 가까운 상태에서도
+                // "신호는 살아있다"를 정상 색으로 계속 보여줄 수 있음.
+                val lineColor = if (channelHasSignal[ch]) {
                     MandroPalette.waveColors[ch]
                 } else {
                     MandroPalette.waveColors[ch].copy(alpha = LOW_SIGNAL_ALPHA)
                 }
 
+                val angleDeviationRad = if (isActive) {
+                    MAX_ANGLE_DEVIATION_RAD
+                } else {
+                    MAX_ANGLE_DEVIATION_RAD * STUB_ANGLE_DEVIATION_SCALE
+                }
                 val jitter = channelJitter[ch]
                 val path = Path().apply {
                     moveTo(cx, cy)
                     for (i in jitter.indices) {
                         val t = (i + 1f) / jitter.size
-                        val angleOffset = (jitter[i] / JITTER_CLAMP) * MAX_ANGLE_DEVIATION_RAD
+                        val angleOffset = (jitter[i] / JITTER_CLAMP) * angleDeviationRad
                         val pointAngle = angle + angleOffset
                         val r = length * t
                         lineTo(cx + cos(pointAngle) * r, cy + sin(pointAngle) * r)

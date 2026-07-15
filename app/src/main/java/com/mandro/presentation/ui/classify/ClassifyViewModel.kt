@@ -45,6 +45,15 @@ class ClassifyViewModel @Inject constructor(
     val channelJitter = Array(EMG_CHANNELS) { FloatArray(JITTER_HISTORY_SIZE) }
     private var jitterWriteIdx = 0
 
+    // "센서가 실제로 데이터를 보내고 있는가"를 channelIntensity(baseline 대비 편차,
+    // 캘리브레이션되면 rest에서 의도적으로 0에 가까워짐)와 분리해서 판단하기 위한
+    // raw(보정 전) 값 기록. WaveformScreen.kt의 hasSignal(p2~p98 스프레드) 판단
+    // 방식과 동일한 아이디어 — baseline 보정과 무관하게 "raw 값 자체가 흔들리고
+    // 있는가"만 봄. 캘리브레이션 여부와 상관없이 항상 유효함.
+    private val rawHistory = Array(EMG_CHANNELS) { FloatArray(RAW_HISTORY_SIZE) }
+    private var rawHistoryWriteIdx = 0
+    val channelHasSignal = BooleanArray(EMG_CHANNELS)
+
     // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md 참고) — 활성 채널(세기가
     // ACTIVE_CHANNEL_THRESHOLD 이상)이 1개 이하인 상태가 REST_HYSTERESIS_MS 이상
     // 지속되면 NN 예측과 무관하게 rest로 덮어씀. 전체 무신호와 단일 채널 노이즈
@@ -129,8 +138,19 @@ class ClassifyViewModel @Inject constructor(
                         (rawDeviation - channelIntensity[ch]).coerceIn(-JITTER_CLAMP, JITTER_CLAMP)
 
                     if (channelIntensity[ch] >= ACTIVE_CHANNEL_THRESHOLD) activeChannels++
+
+                    // raw(보정 전) 값 자체의 최근 스프레드로 "센서가 살아있는가" 판단
+                    rawHistory[ch][rawHistoryWriteIdx % RAW_HISTORY_SIZE] = raw
+                    var rawMin = Float.MAX_VALUE
+                    var rawMax = -Float.MAX_VALUE
+                    for (v in rawHistory[ch]) {
+                        if (v < rawMin) rawMin = v
+                        if (v > rawMax) rawMax = v
+                    }
+                    channelHasSignal[ch] = (rawMax - rawMin) > RAW_NO_SIGNAL_THRESHOLD
                 }
                 jitterWriteIdx++
+                rawHistoryWriteIdx++
 
                 // rest 강제 판정용 "조용한 상태" 지속 시간 추적
                 if (activeChannels <= MAX_QUIET_ACTIVE_CHANNELS) {
@@ -154,6 +174,11 @@ class ClassifyViewModel @Inject constructor(
         private const val ACTIVE_CHANNEL_THRESHOLD = 0.02f
         private const val MAX_QUIET_ACTIVE_CHANNELS = 1
         private const val REST_HYSTERESIS_MS = 100L
+
+        // "센서 살아있음" 판정 — WaveformScreen.kt의 NO_SIGNAL_THRESHOLD(raw 0~255
+        // 기준 5)와 동일한 값. 64샘플(~50ms @1281Hz) 윈도우 안에서의 최대-최소 스프레드.
+        private const val RAW_HISTORY_SIZE = 64
+        private const val RAW_NO_SIGNAL_THRESHOLD = 5f
     }
 }
 
