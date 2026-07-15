@@ -1,5 +1,6 @@
 package com.mandro.presentation.ui.classify
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.core.calibration.RestCalibration
@@ -44,6 +45,12 @@ class ClassifyViewModel @Inject constructor(
     val channelJitter = Array(EMG_CHANNELS) { FloatArray(JITTER_HISTORY_SIZE) }
     private var jitterWriteIdx = 0
 
+    // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md 참고) — 활성 채널(세기가
+    // ACTIVE_CHANNEL_THRESHOLD 이상)이 1개 이하인 상태가 REST_HYSTERESIS_MS 이상
+    // 지속되면 NN 예측과 무관하게 rest로 덮어씀. 전체 무신호와 단일 채널 노이즈
+    // 튐을 하나의 규칙으로 처리.
+    private var quietSinceElapsedMs: Long? = null
+
     init {
         bleRepository.setEmgEnabled(true)
         observeBleState()
@@ -79,9 +86,15 @@ class ClassifyViewModel @Inject constructor(
     private fun observeInference() {
         viewModelScope.launch {
             bleRepository.inferenceStream.collect { result ->
+                val forceRest = restCalibration.isCalibrated &&
+                    quietSinceElapsedMs?.let {
+                        SystemClock.elapsedRealtime() - it >= REST_HYSTERESIS_MS
+                    } == true
+                val className = if (forceRest) "rest" else result.className
+
                 _uiState.update { it.copy(
-                    gesture    = result.className,
-                    gestureKo  = gestureNameKo(result.className),
+                    gesture    = className,
+                    gestureKo  = gestureNameKo(className),
                     probabilities = InferenceResult.GESTURE_NAMES
                         .zip(result.probabilities.toList())
                         .toMap(),
@@ -94,6 +107,7 @@ class ClassifyViewModel @Inject constructor(
     private fun observeEmg() {
         viewModelScope.launch {
             bleRepository.emgStream.collect { sample ->
+                var activeChannels = 0
                 for (ch in 0 until EMG_CHANNELS) {
                     val raw = sample.channels[ch]
                     // 0~1로 clamp하기 전의 편차 — 음수도 그대로 유지해야 떨림이
@@ -113,8 +127,19 @@ class ClassifyViewModel @Inject constructor(
                     // clamp 전 값 기준이라 평균보다 낮은 쪽도 정직하게 음수로 나옴.
                     channelJitter[ch][jitterWriteIdx % JITTER_HISTORY_SIZE] =
                         (rawDeviation - channelIntensity[ch]).coerceIn(-JITTER_CLAMP, JITTER_CLAMP)
+
+                    if (channelIntensity[ch] >= ACTIVE_CHANNEL_THRESHOLD) activeChannels++
                 }
                 jitterWriteIdx++
+
+                // rest 강제 판정용 "조용한 상태" 지속 시간 추적
+                if (activeChannels <= MAX_QUIET_ACTIVE_CHANNELS) {
+                    if (quietSinceElapsedMs == null) {
+                        quietSinceElapsedMs = SystemClock.elapsedRealtime()
+                    }
+                } else {
+                    quietSinceElapsedMs = null
+                }
             }
         }
     }
@@ -123,6 +148,12 @@ class ClassifyViewModel @Inject constructor(
         private const val INTENSITY_SMOOTHING = 0.03f
         private const val JITTER_HISTORY_SIZE = 40
         private const val JITTER_CLAMP = 0.3f
+
+        // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md) — ClassifyScreen.kt의
+        // LOW_SIGNAL_THRESHOLD와 동일한 값을 씀
+        private const val ACTIVE_CHANNEL_THRESHOLD = 0.02f
+        private const val MAX_QUIET_ACTIVE_CHANNELS = 1
+        private const val REST_HYSTERESIS_MS = 100L
     }
 }
 

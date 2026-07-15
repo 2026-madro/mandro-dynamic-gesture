@@ -53,6 +53,14 @@ private const val JITTER_CLAMP = 0.3f
 private const val INTENSITY_GAIN = 15f
 private const val INTENSITY_GAMMA = 0.5f
 
+// 신호 유무 판정 임계값 — ClassifyViewModel의 rest 강제 판정과 동일한 값을 씀
+// (RECOGNITION_IMPROVEMENT.md 참고). 임계값 미만이어도 선을 완전히 숨기지 않고
+// WaveformScreen.kt의 "옅게 그리기" 패턴을 재사용 — 신호가 약하게라도 들어오고
+// 있다는 걸 항상 확인할 수 있어야 함.
+private const val LOW_SIGNAL_THRESHOLD = 0.02f
+private const val LOW_SIGNAL_ALPHA = 0.25f
+private const val MIN_STUB_RADIUS_RATIO = 0.06f
+
 @Composable
 fun ClassifyScreen(
     viewModel: ClassifyViewModel = hiltViewModel(),
@@ -176,9 +184,21 @@ private fun ClassifyContent(
             // 침범하지 않도록 함 (거리로 표현하면 멀어질수록 옆으로 크게 새어나감).
             CHANNEL_ANGLES_RAD.forEachIndexed { ch, angle ->
                 val intensity = channelIntensity[ch].coerceIn(0f, 1f)
-                if (intensity < 0.02f) return@forEachIndexed
+                val hasSignal = intensity >= LOW_SIGNAL_THRESHOLD
 
-                val length = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
+                // 임계값 미만이어도 완전히 숨기지 않고 짧고 옅은 선으로 "신호는
+                // 들어오고 있다"를 표시 (WaveformScreen.kt의 alpha 처리와 동일한 패턴)
+                val length = if (hasSignal) {
+                    maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
+                } else {
+                    maxRadius * MIN_STUB_RADIUS_RATIO
+                }
+                val lineColor = if (hasSignal) {
+                    MandroPalette.waveColors[ch]
+                } else {
+                    MandroPalette.waveColors[ch].copy(alpha = LOW_SIGNAL_ALPHA)
+                }
+
                 val jitter = channelJitter[ch]
                 val path = Path().apply {
                     moveTo(cx, cy)
@@ -193,7 +213,7 @@ private fun ClassifyContent(
 
                 drawPath(
                     path = path,
-                    color = MandroPalette.waveColors[ch],
+                    color = lineColor,
                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
