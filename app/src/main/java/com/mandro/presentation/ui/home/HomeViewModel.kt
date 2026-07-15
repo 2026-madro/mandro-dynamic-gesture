@@ -23,7 +23,12 @@ data class HomeUiState(
     val bleState: BleState = BleState.Disconnected,
     val error: String? = null,
     val deleteTarget: User? = null,
-)
+    val activeUserId: String? = null,
+) {
+    // "암밴드 연결하기"를 누르면 실제로 어느 유저로 동작할지 — 유저 카드를 안 눌러도
+    // 지난 세션에 저장된 activeUserId가 그대로 재사용되므로, 화면에 명시해줘야 함.
+    val activeUser: User? get() = users.find { it.id == activeUserId }
+}
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -49,12 +54,21 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { userRepository.cleanupOrphanedModels() }
         loadUsers()
         observeBleState()
+        observeActiveUser()
     }
 
     private fun observeBleState() {
         viewModelScope.launch {
             bleRepository.bleState.collect { state ->
                 _uiState.update { it.copy(bleState = state) }
+            }
+        }
+    }
+
+    private fun observeActiveUser() {
+        viewModelScope.launch {
+            userPreferences.userId.collect { id ->
+                _uiState.update { it.copy(activeUserId = id) }
             }
         }
     }

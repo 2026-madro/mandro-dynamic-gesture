@@ -1,5 +1,6 @@
 package com.mandro.presentation.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -151,6 +152,7 @@ private fun HomeContent(
                 items(uiState.users) { user ->
                     UserCard(
                         user = user,
+                        isActive = user.id == uiState.activeUserId,
                         onClick = { onUserClick(user) },
                         onResendWeightsClick = { onResendWeightsClick(user) },
                         onDeleteClick = { onDeleteUserClick(user) },
@@ -163,13 +165,28 @@ private fun HomeContent(
                 }
             }
 
-            MandroPrimaryButton(
-                text = "암밴드 연결하기",
-                onClick = onConnectBand,
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 24.dp, vertical = 16.dp),
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // 유저 카드를 새로 안 눌러도 지난 세션의 activeUserId로 그대로 연결되므로,
+                // 어느 유저로 연결될지 버튼 위에 명시해서 실수로 다른 유저 데이터에
+                // 녹화/학습하는 걸 방지.
+                uiState.activeUser?.let { active ->
+                    Text(
+                        text = "${active.name}님으로 연결해요",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MandroPalette.Neutral500,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                MandroPrimaryButton(
+                    text = "암밴드 연결하기",
+                    onClick = onConnectBand,
+                )
+            }
         }
     }
 }
@@ -214,6 +231,7 @@ private fun BandConnectionCard(bleState: BleState) {
 fun UserCard(
     user: User,
     onClick: () -> Unit,
+    isActive: Boolean = false,
     onResendWeightsClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
 ) {
@@ -221,6 +239,7 @@ fun UserCard(
         shape = RoundedCornerShape(16.dp),
         color = MandroPalette.White,
         shadowElevation = 1.dp,
+        border = if (isActive) BorderStroke(1.5.dp, MandroPalette.Primary600) else null,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -245,11 +264,21 @@ fun UserCard(
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = user.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MandroPalette.Neutral900,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = user.name,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MandroPalette.Neutral900,
+                    )
+                    if (isActive) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "현재 유저",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MandroPalette.Primary600,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = if (user.hasModel) "모델 있음" else "모델 없음",
