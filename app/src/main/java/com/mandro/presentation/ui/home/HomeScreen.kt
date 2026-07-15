@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.material3.AlertDialog
@@ -66,12 +67,30 @@ fun HomeScreen(
         )
     }
 
+    val deleteTarget = uiState.deleteTarget
+    if (deleteTarget != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::onDeleteUserCancelled,
+            title = { Text("${deleteTarget.name}님을 삭제할까요?") },
+            text = { Text("녹화된 데이터와 학습된 모델이 모두 삭제되고, 되돌릴 수 없어요.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::onDeleteUserConfirmed) {
+                    Text("삭제", color = MandroPalette.Danger600)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onDeleteUserCancelled) { Text("취소") }
+            },
+        )
+    }
+
     HomeContent(
         uiState = uiState,
         onUserClick = viewModel::onUserSelected,
         onAddUser = onAddUser,
         onConnectBand = viewModel::onConnectBand,
         onResendWeightsClick = viewModel::onResendWeights,
+        onDeleteUserClick = viewModel::onDeleteUserRequested,
     )
 }
 
@@ -82,6 +101,7 @@ private fun HomeContent(
     onAddUser: () -> Unit,
     onConnectBand: () -> Unit,
     onResendWeightsClick: (User) -> Unit = {},
+    onDeleteUserClick: (User) -> Unit = {},
 ) {
     Scaffold(
         containerColor = MandroPalette.Neutral50,
@@ -133,6 +153,7 @@ private fun HomeContent(
                         user = user,
                         onClick = { onUserClick(user) },
                         onResendWeightsClick = { onResendWeightsClick(user) },
+                        onDeleteClick = { onDeleteUserClick(user) },
                     )
                 }
 
@@ -194,6 +215,7 @@ fun UserCard(
     user: User,
     onClick: () -> Unit,
     onResendWeightsClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -243,6 +265,14 @@ fun UserCard(
                         color = MandroPalette.Primary600,
                     )
                 }
+            }
+            IconButton(onClick = onDeleteClick, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "유저 삭제",
+                    tint = MandroPalette.Neutral300,
+                    modifier = Modifier.size(18.dp),
+                )
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,

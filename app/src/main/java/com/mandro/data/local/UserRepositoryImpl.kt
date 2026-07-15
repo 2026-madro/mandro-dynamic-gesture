@@ -42,5 +42,16 @@ class UserRepositoryImpl @Inject constructor(
         userDao.insert(UserEntity.fromDomain(user)) // REPLACE 전략이라 upsert로 동작
     }
 
-    override suspend fun deleteUser(id: String) = userDao.deleteById(id)
+    override suspend fun deleteUser(id: String) {
+        userDao.deleteById(id)
+        File(context.filesDir, "models/$id").deleteRecursively()
+    }
+
+    override suspend fun cleanupOrphanedModels() {
+        val modelsDir = File(context.filesDir, "models")
+        val knownIds = userDao.getAllIds().toSet()
+        modelsDir.listFiles { file -> file.isDirectory }
+            ?.filter { it.name !in knownIds }
+            ?.forEach { it.deleteRecursively() }
+    }
 }

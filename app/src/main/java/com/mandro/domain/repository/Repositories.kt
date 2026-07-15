@@ -9,6 +9,11 @@ interface UserRepository {
     suspend fun createUser(name: String, researchConsent: Boolean): User
     suspend fun updateUser(user: User)
     suspend fun deleteUser(id: String)
+
+    // users 테이블에 없는 userId의 models/ 폴더(고아 폴더)를 정리.
+    // Room fallbackToDestructiveMigration()이 DB만 초기화하고 파일은 안 지워서
+    // 스키마 버전이 바뀔 때마다 고아 폴더가 남을 수 있음 — 앱 시작 시 호출해서 청소.
+    suspend fun cleanupOrphanedModels()
 }
 
 interface EmgRepository {

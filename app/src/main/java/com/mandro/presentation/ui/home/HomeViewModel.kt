@@ -6,6 +6,7 @@ import com.mandro.data.local.UserPreferences
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.User
 import com.mandro.domain.repository.BleRepository
+import com.mandro.domain.repository.EmgRepository
 import com.mandro.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -21,11 +22,13 @@ data class HomeUiState(
     val users: List<User> = emptyList(),
     val bleState: BleState = BleState.Disconnected,
     val error: String? = null,
+    val deleteTarget: User? = null,
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
+    private val emgRepository: EmgRepository,
     private val userPreferences: UserPreferences,
     private val bleRepository: BleRepository,
 ) : ViewModel() {
@@ -43,6 +46,7 @@ class HomeViewModel @Inject constructor(
     val navigateToFirmware = _navigateToFirmware.receiveAsFlow()
 
     init {
+        viewModelScope.launch { userRepository.cleanupOrphanedModels() }
         loadUsers()
         observeBleState()
     }
@@ -93,5 +97,25 @@ class HomeViewModel @Inject constructor(
 
     fun onErrorDismissed() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    fun onDeleteUserRequested(user: User) {
+        _uiState.update { it.copy(deleteTarget = user) }
+    }
+
+    fun onDeleteUserCancelled() {
+        _uiState.update { it.copy(deleteTarget = null) }
+    }
+
+    fun onDeleteUserConfirmed() {
+        val target = _uiState.value.deleteTarget ?: return
+        viewModelScope.launch {
+            emgRepository.clearBatch(target.id)
+            userRepository.deleteUser(target.id)
+            if (userPreferences.getUserId() == target.id) {
+                userPreferences.clear()
+            }
+            _uiState.update { it.copy(deleteTarget = null) }
+        }
     }
 }
