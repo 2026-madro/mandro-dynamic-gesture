@@ -121,12 +121,56 @@ Waveform 화면은 신호가 threshold 밑이어도 선을 아예 안 그리는 
   Waveform 화면의 `hasSignal`은 baseline 보정 없는 raw p2-p98 스프레드로 판단해서
   이 문제가 없음 — Classify도 그 방식을 따로 가져와야 할 듯.
 
+## 문제 2 재설계 및 구현 (2026-07-15, 2차)
+
+**핵심 아이디어**: "근육이 활성 상태인가"(`channelIntensity`, baseline 대비 편차 —
+rest에서 0에 가까운 게 정상)와 "센서가 실제로 데이터를 보내고 있는가"(raw 값 자체의
+흔들림)를 완전히 분리된 두 값으로 나눔.
+
+**구현**:
+- `ClassifyViewModel`에 raw(보정 전) 값의 최근 64샘플(~50ms) 윈도우 min-max
+  스프레드로 판단하는 `channelHasSignal: BooleanArray` 추가 (`RAW_NO_SIGNAL_THRESHOLD
+  = 5`, Waveform의 `NO_SIGNAL_THRESHOLD`와 동일 값 재사용)
+- `ClassifyScreen.kt` 레이더 차트: **길이는 `channelIntensity` 그대로**(가짜 최소
+  길이 없음), **색상/alpha만 `channelHasSignal`로 결정** — rest에서 길이는 짧아도
+  색은 정상으로 유지돼서 "신호는 살아있다"가 전달됨
+
+**가짜 최소 길이(stub) 도입 → 제거 히스토리**: 처음엔 `MIN_STUB_RADIUS_RATIO`로
+짧은 채널에 고정 최소 길이를 줬는데, 사용자 피드백으로 **"이게 진짜 신호인지
+디폴트값인지 헷갈린다"**는 문제가 있어서 제거함 — 길이는 항상 실제 `channelIntensity`
+값을 정직하게 반영하고, "살아있음" 표시는 색상(`channelHasSignal`)에만 위임하는
+쪽으로 정리.
+
+**추가로 발견/수정한 버그**: `drawCircle()`(중심 흰 점, 반지름 4dp)이 채널 선보다
+**나중에** 그려지고 있어서, stub 제거 후 짧아진 채널 선들이 이 점 밑에 가려지는
+문제 발견 → 중심점을 채널 선보다 **먼저** 그리도록 순서 변경 (`ClassifyScreen.kt`).
+
+**미해결**: 각도 흔들림 완화용 `STUB_ANGLE_DEVIATION_SCALE`가 `isActive`
+(`channelIntensity >= LOW_SIGNAL_THRESHOLD`) 기준으로 남아있음 — 이름이
+더는 안 맞을 수 있어서 다음에 정리 필요.
+
+## rest 판정 재조정 필요성 발견 (2026-07-15, 3차)
+
+**회귀 발견**: `MAX_QUIET_ACTIVE_CHANNELS = 1`(활성 채널 ≤1개면 rest 강제) 룰이
+supination/pronation 자체도 rest로 잡아먹는 문제 발생 — sup/pro는 원래 활성화되는
+채널 수 자체가 적어서(회외근/원회내근이 팔꿈치 쪽 깊은 곳에 있어 이 밴드 위치에서
+약하게 잡힘, weights.bin 분석에서도 CH7 의존도가 높고 다른 채널은 상대적으로 약함),
+"노이즈 1채널 튐"과 "진짜 약한 sup/pro"가 지금 룰(채널 개수만 봄) 기준으로 구분이
+안 됨.
+
+**제안했으나 아직 미적용**: `MAX_QUIET_ACTIVE_CHANNELS`를 1→0으로 낮추는 안
+(완전 무신호일 때만 rest 강제, 노이즈 재발 리스크 있음) — 사용자가 raw 데이터를
+같이 보고 판단하길 원해서 보류. 사용자 관찰: "pronation/supination 동작 시 센서
+값이 rest보다 크긴 하다" — 즉 신호 자체는 구분 가능한 차이가 있는데, 지금
+threshold 설계(채널 개수 이진 판단)가 그 차이를 못 살리고 있을 가능성.
+
 ## 다음 단계
 
 1. ~~문제 1, 2 각각 threshold 값/방식에 대한 의사결정~~ 완료
 2. ~~`ClassifyViewModel`에 프로토타입 구현~~ 완료
-3. ~~실기기로 "가만히 있기" / "약하게 힘주기" 시나리오 테스트~~ 완료 — 문제 2 재작업 필요
-4. **문제 2 재설계**: 레이더 차트 stub을 `channelIntensity` 대신 raw emgStream의
-   순간 변동폭(Waveform의 `hasSignal` 판단 방식과 유사하게, baseline 보정 없이)으로
-   구동하도록 변경
-5. 필요하면 펌웨어 이관 여부 결정
+3. ~~문제 2 재설계 (raw 기반 channelHasSignal)~~ 완료
+4. ~~중심점 가림 버그 수정~~ 완료
+5. **rest 판정 조건 재설계** — raw 데이터(rest vs sup/pro 시 실제 채널값)를 실측
+   로그로 같이 보고, "활성 채널 개수" 이진 판단 대신 더 세밀한 기준(예: 채널별
+   절대값 크기, 지속 시간 등) 검토
+6. 필요하면 펌웨어 이관 여부 결정

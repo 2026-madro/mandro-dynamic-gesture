@@ -182,6 +182,14 @@ private fun ClassifyContent(
                 )
             }
 
+            // 중심점을 채널 선보다 먼저 그림 — 나중에 그리면 길이가 짧은(rest 근처)
+            // 채널 선이 이 점(반지름 4dp) 밑에 완전히 가려지는 문제가 있었음.
+            drawCircle(
+                color = MandroPalette.White,
+                radius = 4.dp.toPx(),
+                center = Offset(cx, cy),
+            )
+
             // 채널별 선 — 길이는 세기(channelIntensity, 느리게 스무딩됨),
             // 선의 흔들림은 떨림(channelJitter, 순간 편차 히스토리)으로 그려서
             // "세기"와 "노이즈"를 시각적으로 분리함. 떨림은 "수직 거리"가 아니라
@@ -230,13 +238,6 @@ private fun ClassifyContent(
                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
-
-            // 중심점
-            drawCircle(
-                color = MandroPalette.White,
-                radius = 4.dp.toPx(),
-                center = Offset(cx, cy),
-            )
         }
 
         // 하단 재학습 버튼
