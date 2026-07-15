@@ -1,6 +1,7 @@
 package com.mandro.presentation.ui.classify
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.core.calibration.RestCalibration
@@ -59,6 +60,10 @@ class ClassifyViewModel @Inject constructor(
     // 지속되면 NN 예측과 무관하게 rest로 덮어씀. 전체 무신호와 단일 채널 노이즈
     // 튐을 하나의 규칙으로 처리.
     private var quietSinceElapsedMs: Long? = null
+
+    // rest 판정 threshold 튜닝용 raw 데이터 로그 (RECOGNITION_IMPROVEMENT.md 3차 참고)
+    // — adb logcat -s ClassifyRaw 로 필터링해서 rest/sup/pro 시 실제 값 비교
+    private var lastLogElapsedMs = 0L
 
     init {
         bleRepository.setEmgEnabled(true)
@@ -153,12 +158,23 @@ class ClassifyViewModel @Inject constructor(
                 rawHistoryWriteIdx++
 
                 // rest 강제 판정용 "조용한 상태" 지속 시간 추적
+                val now = SystemClock.elapsedRealtime()
                 if (activeChannels <= MAX_QUIET_ACTIVE_CHANNELS) {
                     if (quietSinceElapsedMs == null) {
-                        quietSinceElapsedMs = SystemClock.elapsedRealtime()
+                        quietSinceElapsedMs = now
                     }
                 } else {
                     quietSinceElapsedMs = null
+                }
+
+                if (now - lastLogElapsedMs >= LOG_INTERVAL_MS) {
+                    lastLogElapsedMs = now
+                    Log.d(
+                        "ClassifyRaw",
+                        "raw=[${sample.channels.joinToString(",") { "%3.0f".format(it) }}] " +
+                            "intensity=[${channelIntensity.joinToString(",") { "%.3f".format(it) }}] " +
+                            "active=$activeChannels",
+                    )
                 }
             }
         }
@@ -169,9 +185,12 @@ class ClassifyViewModel @Inject constructor(
         private const val JITTER_HISTORY_SIZE = 40
         private const val JITTER_CLAMP = 0.3f
 
-        // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md) — ClassifyScreen.kt의
-        // LOW_SIGNAL_THRESHOLD와 동일한 값을 씀
-        private const val ACTIVE_CHANNEL_THRESHOLD = 0.02f
+        // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md 3차) — ClassifyScreen.kt의
+        // LOW_SIGNAL_THRESHOLD와 동일한 값을 씀. 0715static 실측 데이터 시뮬레이션
+        // 결과 0.02는 supination/pronation의 핵심 채널(CH6,7)조차 자주 못 넘겨서
+        // sup/pro가 rest로 오분류되는 비율이 58~88%에 달했음 — 0.01로 낮춰서
+        // sup/pro 오분류 0.4~5.9%로 개선 (rest 정확도는 100%→93.8%, hysteresis로 보완).
+        private const val ACTIVE_CHANNEL_THRESHOLD = 0.01f
         private const val MAX_QUIET_ACTIVE_CHANNELS = 1
         private const val REST_HYSTERESIS_MS = 100L
 
@@ -179,6 +198,8 @@ class ClassifyViewModel @Inject constructor(
         // 기준 5)와 동일한 값. 64샘플(~50ms @1281Hz) 윈도우 안에서의 최대-최소 스프레드.
         private const val RAW_HISTORY_SIZE = 64
         private const val RAW_NO_SIGNAL_THRESHOLD = 5f
+
+        private const val LOG_INTERVAL_MS = 150L
     }
 }
 

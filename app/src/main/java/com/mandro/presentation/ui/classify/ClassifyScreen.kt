@@ -58,7 +58,8 @@ private const val INTENSITY_GAMMA = 0.5f
 // (RECOGNITION_IMPROVEMENT.md 참고). 임계값 미만이어도 선을 완전히 숨기지 않고
 // WaveformScreen.kt의 "옅게 그리기" 패턴을 재사용 — 신호가 약하게라도 들어오고
 // 있다는 걸 항상 확인할 수 있어야 함.
-private const val LOW_SIGNAL_THRESHOLD = 0.02f
+// ClassifyViewModel의 ACTIVE_CHANNEL_THRESHOLD와 동일한 값 유지 (RECOGNITION_IMPROVEMENT.md 3차)
+private const val LOW_SIGNAL_THRESHOLD = 0.01f
 private const val LOW_SIGNAL_ALPHA = 0.25f
 // 길이가 짧을 때(rest 근처)는 각도 흔들림도 비례해서 줄임 — 안 그러면 짧은 길이
 // 대비 각도 흔들림 폭이 상대적으로 훨씬 커 보여서 산만해짐.

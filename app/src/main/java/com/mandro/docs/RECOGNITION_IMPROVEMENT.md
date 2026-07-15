@@ -158,11 +158,38 @@ supination/pronation 자체도 rest로 잡아먹는 문제 발생 — sup/pro는
 "노이즈 1채널 튐"과 "진짜 약한 sup/pro"가 지금 룰(채널 개수만 봄) 기준으로 구분이
 안 됨.
 
-**제안했으나 아직 미적용**: `MAX_QUIET_ACTIVE_CHANNELS`를 1→0으로 낮추는 안
-(완전 무신호일 때만 rest 강제, 노이즈 재발 리스크 있음) — 사용자가 raw 데이터를
-같이 보고 판단하길 원해서 보류. 사용자 관찰: "pronation/supination 동작 시 센서
-값이 rest보다 크긴 하다" — 즉 신호 자체는 구분 가능한 차이가 있는데, 지금
-threshold 설계(채널 개수 이진 판단)가 그 차이를 못 살리고 있을 가능성.
+**초기 제안(미적용, 폐기)**: `MAX_QUIET_ACTIVE_CHANNELS`를 1→0으로 낮추는 안을
+검토했으나, 실측 데이터로 시뮬레이션해보니 이걸로도 부족했음(아래 참고) — 폐기.
+
+### 실측 데이터 기반 재조정 (2026-07-15, 4차)
+
+`0715static` 유저의 기존 녹화 데이터(`mandro4.db`, adb로 이미 pull해둔 것)를 갖고
+`ClassifyViewModel`의 `channelIntensity` EMA 공식을 Python으로 그대로 재현해서
+검증함 (baseline은 Rest take 자체 평균으로 근사).
+
+**채널별 분석 결과**: **CH6, CH7 딱 두 채널만** supination/pronation에서 rest 대비
+뚜렷하게 구분됨(intensity median 0.015~0.022 근처). 나머지 6개 채널(CH0~5)은
+sup/pro를 해도 rest와 거의 값이 같음 — 즉 이 밴드 배치에서 sup/pro의 판별 정보가
+CH6/CH7 두 채널에 집중돼 있음.
+
+**threshold=0.02(기존)로 시뮬레이션한 "rest 강제 발동 비율"**:
+| | Rest | Supination | Pronation |
+|---|---|---|---|
+| 활성 채널 ≤1 비율 | 100% (정상) | **58.4% 오분류** | **87.7% 오분류** |
+
+CH6/CH7조차 0.02를 자주 못 넘어서(pronation 때 CH6가 0.02 넘는 비율 38.7%뿐)
+"활성 채널 2개(CH6+CH7)" 조건을 거의 못 채웠던 것 — `MAX_QUIET_ACTIVE_CHANNELS`를
+0으로 낮추는 것만으론 해결 안 됐을 문제(Pronation은 활성==0도 58.4%).
+
+**`ACTIVE_CHANNEL_THRESHOLD`를 0.02→0.01로 낮춰서 재시뮬레이션**:
+| | Rest | Supination | Pronation |
+|---|---|---|---|
+| 활성 채널 ≤1 비율 | 93.8% (약간 감소, hysteresis로 보완 가능) | **0.4%** | **5.9%** |
+
+**적용 완료**: `ClassifyViewModel.ACTIVE_CHANNEL_THRESHOLD`, `ClassifyScreen
+.LOW_SIGNAL_THRESHOLD` 둘 다 0.02 → 0.01로 변경. 분석 스크립트:
+`C:\tmp_adb_pull\simulate_rest_threshold.py`, `simulate_per_channel.py`
+(프로젝트 밖 임시 위치, 영구 보존 아님).
 
 ## 다음 단계
 
