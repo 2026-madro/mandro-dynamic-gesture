@@ -69,44 +69,26 @@ fun CollectScreen(
 
     // 온셋/오프셋 큐 — "삐" 소리 + 화면 플래시. ToneGenerator는 화면 살아있는 동안
     // 하나만 만들어 재사용하고, 나갈 때 release() 필수(안 하면 리소스 누수).
-    // STREAM_ALARM은 무음/방해금지 모드의 영향을 가장 덜 받는 스트림이라, 큐 소리가
-    // 확실히 들리도록 STREAM_MUSIC 대신 이걸 씀.
-    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_ALARM, 100) }
+    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }
     DisposableEffect(Unit) {
         onDispose { toneGenerator.release() }
     }
 
     var cueCount by remember { mutableIntStateOf(0) }
-    // 채워진 원 개수(0~PREP_STEPS) — "동그라미 3개가 다 채워지면 동작" 카운트다운
-    var filledCircles by remember { mutableIntStateOf(0) }
     var showCueFlash by remember { mutableStateOf(false) }
 
     // 다음 동작/랩으로 넘어갈 때마다 반복 카운트 리셋
     LaunchedEffect(uiState.currentGestureIndex, uiState.currentLap) {
         cueCount = 0
-        filledCircles = 0
-        showCueFlash = false
     }
 
     LaunchedEffect(Unit) {
-        viewModel.cueEvent.collect { signal ->
-            when (signal) {
-                is CueSignal.Prep -> {
-                    filledCircles = signal.step
-                    // 짧은 틱음("동동")
-                    toneGenerator.startTone(ToneGenerator.TONE_CDMA_PIP, 80)
-                }
-                CueSignal.Active -> {
-                    filledCircles = PREP_STEPS
-                    // 마지막 원이 채워지는 순간("삡") — 틱음보다 살짝 길게 줘서 구분
-                    toneGenerator.startTone(ToneGenerator.TONE_CDMA_PIP, 150)
-                    cueCount++
-                    showCueFlash = true
-                    kotlinx.coroutines.delay(300)
-                    showCueFlash = false
-                    filledCircles = 0
-                }
-            }
+        viewModel.cueEvent.collect {
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+            cueCount++
+            showCueFlash = true
+            kotlinx.coroutines.delay(300)
+            showCueFlash = false
         }
     }
 
@@ -119,7 +101,6 @@ fun CollectScreen(
         uiState = uiState,
         getAmplitudes = { viewModel.channelAmplitudes },
         cueCount = cueCount,
-        filledCircles = filledCircles,
         showCueFlash = showCueFlash,
         onStartTrainingEarly = viewModel::onStartTrainingEarly,
         onDebugSkip = viewModel::onDebugSkip,
@@ -133,7 +114,6 @@ private fun CollectContent(
     uiState: CollectUiState,
     getAmplitudes: () -> FloatArray = { FloatArray(EMG_CHANNELS) },
     cueCount: Int = 0,
-    filledCircles: Int = 0,
     showCueFlash: Boolean = false,
     onStartTrainingEarly: () -> Unit = {},
     onDebugSkip: () -> Unit = {},
@@ -270,18 +250,6 @@ private fun CollectContent(
                     is CollectPhase.Countdown -> CountdownCircle(count = phase.count)
                     is CollectPhase.Recording -> SignalStrengthBars(getAmplitudes = getAmplitudes)
                 }
-            }
-
-            // 카운트다운 원 3개 — 삐 소리+"지금!"이 예고 없이 바로 뜨면 준비할 틈이
-            // 없다는 피드백으로 추가. 원이 하나씩 채워지다가 3개(전부) 채워지는
-            // 순간 = 활성 큐(삐 소리)와 동시. 화면 하단에 작게 표시.
-            if (uiState.phase is CollectPhase.Recording && uiState.currentGestureName != "Rest") {
-                PrepCircles(
-                    filledCount = filledCircles,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 12.dp),
-                )
             }
 
             // 온셋/오프셋 큐 플래시 — "지금!" 큰 텍스트로 잠깐 표시.
@@ -471,41 +439,6 @@ private fun LapReviewDialog(
             }
         },
     )
-}
-
-/** "동그라미 3개가 채워지면 동작" 카운트다운 표시. filledCount만큼 왼쪽부터 채워짐. */
-@Composable
-private fun PrepCircles(
-    filledCount: Int,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        repeat(PREP_STEPS) { index ->
-            val filled = index < filledCount
-            val animatedColor by animateFloatAsState(
-                targetValue = if (filled) 1f else 0f,
-                animationSpec = tween(150),
-                label = "circle_fill_$index",
-            )
-            Box(
-                modifier = Modifier
-                    .size(18.dp)
-                    .background(
-                        color = MandroPalette.Primary600.copy(alpha = 0.25f + animatedColor * 0.75f),
-                        shape = CircleShape,
-                    )
-                    .border(
-                        width = 1.5.dp,
-                        color = MandroPalette.Primary600,
-                        shape = CircleShape,
-                    ),
-            )
-        }
-    }
 }
 
 @Composable

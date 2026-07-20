@@ -35,24 +35,10 @@ private const val COUNTDOWN_STEP_MS = 1000L
 // 나머지는 Rest로 윈도우별로 기록. Rest 랩 자체는 큐 없이 계속 Rest.
 const val REPS_PER_TAKE = 5
 private const val CYCLE_MS = RECORD_DURATION_MS / REPS_PER_TAKE  // 2000ms
-// "동그라미 3개가 채워지면 동작" 카운트다운 — 앞의 2개는 짧은 틱음("동동"),
-// 마지막(3번째)이 채워지는 순간이 곧 활성 큐("삡")이자 실제 동작 시작 신호.
-const val PREP_STEPS = 3
-private const val PREP_STEP_MS = 300L
-// 마지막 원이 채워진(=삡 소리) 이후 반응 시간을 감안해 살짝 늦게 활성 구간 시작
+// 큐(삐 소리) 이후 반응 시간을 감안해 살짝 늦게 활성 구간 시작
 private const val REACTION_DELAY_MS = 150L
 private const val ACTIVE_WINDOW_MS = 700L
 private const val REST_GESTURE_NAME = "Rest"
-
-/**
- * CollectScreen에 전달하는 큐 신호.
- * Prep(step): 1, 2번째 원이 채워지는 순간(짧은 틱음, "동동")
- * Active: 3번째(마지막) 원이 채워지는 순간 — "삡" 소리 + "지금!" 플래시 + 라벨 활성 구간 시작
- */
-sealed class CueSignal {
-    data class Prep(val step: Int) : CueSignal()
-    object Active : CueSignal()
-}
 
 sealed class CollectPhase {
     data class Countdown(val count: Int) : CollectPhase()
@@ -99,8 +85,8 @@ class CollectViewModel @Inject constructor(
     private val recordingLabelBuffer = mutableListOf<String>()
     private var recordingStartElapsedMs = 0L
 
-    // 큐(준비 표시 → 삐 소리+화면 플래시) 이벤트 — CollectScreen이 구독해서 사운드/애니메이션 재생
-    private val _cueEvent = Channel<CueSignal>(Channel.BUFFERED)
+    // 큐(삐 소리 + 화면 플래시) 이벤트 — CollectScreen이 구독해서 사운드/애니메이션 재생
+    private val _cueEvent = Channel<Unit>(Channel.BUFFERED)
     val cueEvent = _cueEvent.receiveAsFlow()
 
     init {
@@ -234,39 +220,26 @@ class CollectViewModel @Inject constructor(
     }
 
     /**
-     * 지금 elapsed 시간이 큐 활성 구간(3번째 원이 채워진 시점 + REACTION_DELAY_MS ~
-     * +ACTIVE_WINDOW_MS) 안이면 해당 동작 라벨, 아니면 Rest. Rest 랩 자체는 큐 없이
-     * 항상 Rest.
-     *
-     * 첫 번째 반복(rep 0)은 사용자가 아직 큐 리듬에 적응하기 전이라 반응이 늦거나
-     * 놓치기 쉬움 — 학습 데이터로 신뢰하기 어려워서 항상 Rest로 처리(사실상 폐기).
+     * 지금 elapsed 시간이 큐 활성 구간(REACTION_DELAY_MS ~ +ACTIVE_WINDOW_MS)
+     * 안이면 해당 동작 라벨, 아니면 Rest. Rest 랩 자체는 큐 없이 항상 Rest.
      */
     private fun labelForElapsed(elapsedMs: Long, gestureName: String): String {
         if (gestureName == REST_GESTURE_NAME) return REST_GESTURE_NAME
-        val repIndex = (elapsedMs / CYCLE_MS).toInt()
-        if (repIndex == 0) return REST_GESTURE_NAME
         val posInCycle = elapsedMs % CYCLE_MS
-        // 원 2개(1,2번째)가 채워지는 데 걸리는 시간 이후 3번째가 채워짐(=활성 신호)
-        val activeCueAtMs = PREP_STEP_MS * (PREP_STEPS - 1)
-        val activeStart = activeCueAtMs + REACTION_DELAY_MS
-        val activeEnd = activeStart + ACTIVE_WINDOW_MS
-        return if (posInCycle in activeStart until activeEnd) gestureName else REST_GESTURE_NAME
+        return if (posInCycle in REACTION_DELAY_MS until (REACTION_DELAY_MS + ACTIVE_WINDOW_MS)) {
+            gestureName
+        } else {
+            REST_GESTURE_NAME
+        }
     }
 
-    /**
-     * REPS_PER_TAKE번, 사이클(CYCLE_MS)마다 원 1,2번째 채움(Prep, 틱음) → 3번째
-     * 채움(Active, 삐+플래시) 순서로 큐 이벤트 발행. Rest 랩은 큐 없음.
-     */
+    /** REPS_PER_TAKE번 큐(삐+플래시) 이벤트를 CYCLE_MS 간격으로 발행. Rest 랩은 큐 없음. */
     private fun scheduleCues(gestureName: String) {
         if (gestureName == REST_GESTURE_NAME) return
         viewModelScope.launch {
             repeat(REPS_PER_TAKE) { rep ->
-                if (rep > 0) delay(CYCLE_MS - PREP_STEP_MS * (PREP_STEPS - 1))
-                for (step in 1 until PREP_STEPS) {
-                    _cueEvent.send(CueSignal.Prep(step))
-                    delay(PREP_STEP_MS)
-                }
-                _cueEvent.send(CueSignal.Active)
+                if (rep > 0) delay(CYCLE_MS)
+                _cueEvent.send(Unit)
             }
         }
     }
