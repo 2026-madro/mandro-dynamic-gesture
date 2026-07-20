@@ -1,7 +1,5 @@
 package com.mandro.presentation.ui.collect
 
-import android.media.AudioManager
-import android.media.ToneGenerator
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -24,12 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,31 +62,6 @@ fun CollectScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 온셋/오프셋 큐 — "삐" 소리 + 화면 플래시. ToneGenerator는 화면 살아있는 동안
-    // 하나만 만들어 재사용하고, 나갈 때 release() 필수(안 하면 리소스 누수).
-    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }
-    DisposableEffect(Unit) {
-        onDispose { toneGenerator.release() }
-    }
-
-    var cueCount by remember { mutableIntStateOf(0) }
-    var showCueFlash by remember { mutableStateOf(false) }
-
-    // 다음 동작/랩으로 넘어갈 때마다 반복 카운트 리셋
-    LaunchedEffect(uiState.currentGestureIndex, uiState.currentLap) {
-        cueCount = 0
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.cueEvent.collect {
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
-            cueCount++
-            showCueFlash = true
-            kotlinx.coroutines.delay(300)
-            showCueFlash = false
-        }
-    }
-
     if (uiState.isDone) {
         onDone()
         return
@@ -100,8 +70,6 @@ fun CollectScreen(
     CollectContent(
         uiState = uiState,
         getAmplitudes = { viewModel.channelAmplitudes },
-        cueCount = cueCount,
-        showCueFlash = showCueFlash,
         onStartTrainingEarly = viewModel::onStartTrainingEarly,
         onDebugSkip = viewModel::onDebugSkip,
         onRedoLap = viewModel::onRedoLap,
@@ -113,8 +81,6 @@ fun CollectScreen(
 private fun CollectContent(
     uiState: CollectUiState,
     getAmplitudes: () -> FloatArray = { FloatArray(EMG_CHANNELS) },
-    cueCount: Int = 0,
-    showCueFlash: Boolean = false,
     onStartTrainingEarly: () -> Unit = {},
     onDebugSkip: () -> Unit = {},
     onRedoLap: () -> Unit = {},
@@ -251,45 +217,6 @@ private fun CollectContent(
                     is CollectPhase.Recording -> SignalStrengthBars(getAmplitudes = getAmplitudes)
                 }
             }
-
-            // 온셋/오프셋 큐 플래시 — "지금!" 큰 텍스트로 잠깐 표시.
-            // BoxScope 안에서는 ColumnScope.AnimatedVisibility 확장 함수와
-            // 암시적 리시버가 충돌해서 완전한 이름으로 명시해야 함.
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showCueFlash,
-                enter = scaleIn(tween(100), initialScale = 0.8f) + fadeIn(tween(80)),
-                exit = fadeOut(tween(150)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MandroPalette.Primary600.copy(alpha = 0.85f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "지금!",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MandroPalette.White,
-                    )
-                }
-            }
-        }
-
-        // 반복 횟수 안내 (Rest 랩은 큐가 없어서 표시 안 함)
-        AnimatedVisibility(
-            visible = uiState.phase is CollectPhase.Recording && uiState.currentGestureName != "Rest",
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Text(
-                text = "반복 $cueCount / $REPS_PER_TAKE",
-                style = MaterialTheme.typography.labelMedium,
-                color = MandroPalette.Neutral500,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(4.dp))
         }
 
         AnimatedContent(
