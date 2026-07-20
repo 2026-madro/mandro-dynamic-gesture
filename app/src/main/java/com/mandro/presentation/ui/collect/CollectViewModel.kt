@@ -43,10 +43,6 @@ private const val PREP_STEP_MS = 300L
 private const val REACTION_DELAY_MS = 150L
 private const val ACTIVE_WINDOW_MS = 700L
 private const val REST_GESTURE_NAME = "Rest"
-// 첫 반복(rep 0)은 타이밍 적응 전이라 신뢰 못 하는 구간 — "Rest"로 잘못 라벨링하면
-// 동작이 섞인 신호를 "이것도 Rest다"라고 가르쳐 오히려 Rest 쪽으로 편향시킬 수 있음.
-// GESTURE_INDEX(EmgSerialization.kt)에 없는 값이라 학습에서 자동으로 제외됨.
-private const val DISCARD_LABEL = "Discard"
 
 /**
  * CollectScreen에 전달하는 큐 신호.
@@ -243,13 +239,12 @@ class CollectViewModel @Inject constructor(
      * 항상 Rest.
      *
      * 첫 번째 반복(rep 0)은 사용자가 아직 큐 리듬에 적응하기 전이라 반응이 늦거나
-     * 놓치기 쉬움 — Rest로 잘못 라벨링하면 동작이 섞인 신호를 Rest로 잘못 가르칠
-     * 위험이 있어서, 아예 학습에서 제외되는 DISCARD_LABEL을 붙임.
+     * 놓치기 쉬움 — 학습 데이터로 신뢰하기 어려워서 항상 Rest로 처리(사실상 폐기).
      */
     private fun labelForElapsed(elapsedMs: Long, gestureName: String): String {
         if (gestureName == REST_GESTURE_NAME) return REST_GESTURE_NAME
         val repIndex = (elapsedMs / CYCLE_MS).toInt()
-        if (repIndex == 0) return DISCARD_LABEL
+        if (repIndex == 0) return REST_GESTURE_NAME
         val posInCycle = elapsedMs % CYCLE_MS
         // 원 2개(1,2번째)가 채워지는 데 걸리는 시간 이후 3번째가 채워짐(=활성 신호)
         val activeCueAtMs = PREP_STEP_MS * (PREP_STEPS - 1)
