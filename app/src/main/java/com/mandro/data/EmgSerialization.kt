@@ -28,9 +28,12 @@ val GESTURE_INDEX = mapOf(
 fun serializeBatch(batch: RecordingBatch): Pair<ByteArray, ByteArray> {
     val allWindows = mutableListOf<Pair<EmgWindow, Int>>() // (window, gestureIdx)
     for ((gesture, takes) in batch.takes) {
-        val gestureIdx = GESTURE_INDEX[gesture] ?: continue
         for (take in takes) {
             for (window in take.windows) {
+                // 온셋/오프셋 큐 녹화 시 윈도우별 실제 라벨(window.label)이 take의
+                // gesture와 다를 수 있음(큐 비활성 구간은 Rest) — 반드시 윈도우
+                // 라벨을 우선 사용. label이 없는 과거 데이터는 take의 gesture로 폴백.
+                val gestureIdx = GESTURE_INDEX[window.label ?: gesture] ?: continue
                 allWindows.add(window to gestureIdx)
             }
         }
