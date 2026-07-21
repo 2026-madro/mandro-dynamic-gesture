@@ -113,11 +113,28 @@ class ClassifyViewModel @Inject constructor(
     private fun observeInference() {
         viewModelScope.launch {
             bleRepository.inferenceStream.collect { result ->
-                val forceRest = restCalibration.isCalibrated &&
+                // "채널 하나라도 강하게 활성이면 rest일 수 없다" — ACTIVE_CHANNEL_THRESHOLD
+                // (노이즈와 섞이는 낮은 값)보다 훨씬 높은 STRONG_SIGNAL_THRESHOLD를 써서,
+                // 노이즈가 아니라 실제 근수축으로 볼 수 있는 경우만 잡음. 아래 forceRest
+                // (quiet-hysteresis 기반)보다 반드시 먼저 체크해야 함 — 안 그러면 "활성
+                // 채널이 정확히 1개, 근데 그게 강하게 활성"인 경우 두 규칙이 동시에
+                // 조건을 만족해서 forceRest가 이겨버리는 모순이 생김.
+                val hasStrongSignal = channelIntensity.any { it >= STRONG_SIGNAL_THRESHOLD }
+
+                val forceRest = !hasStrongSignal && restCalibration.isCalibrated &&
                     quietSinceElapsedMs?.let {
                         SystemClock.elapsedRealtime() - it >= REST_HYSTERESIS_MS
                     } == true
-                val className = if (forceRest) "rest" else result.className
+
+                // 강한 신호가 있는데 NN이 그래도 rest라고 했으면, rest를 뺀 나머지
+                // 중 확률이 가장 높은 클래스로 대체 — sup/pro끼리는 구분이 어려워도
+                // rest와의 구분은 명확하다는 전제(사용자 관찰) 하에, "무엇인지는
+                // 몰라도 rest는 아니다"를 확률 2등으로 근사함.
+                val className = when {
+                    forceRest -> "rest"
+                    hasStrongSignal && result.className == "rest" -> bestNonRestClassName(result)
+                    else -> result.className
+                }
 
                 _uiState.update { it.copy(
                     gesture    = className,
@@ -128,6 +145,15 @@ class ClassifyViewModel @Inject constructor(
                 ) }
             }
         }
+    }
+
+    /** probabilities[0]=rest를 제외하고 확률이 가장 높은 클래스 이름 반환 */
+    private fun bestNonRestClassName(result: InferenceResult): String {
+        var bestIdx = 1
+        for (i in 2 until result.probabilities.size) {
+            if (result.probabilities[i] > result.probabilities[bestIdx]) bestIdx = i
+        }
+        return InferenceResult.GESTURE_NAMES[bestIdx]
     }
 
     /** raw EMG stream → 레이더 차트 채널 값(세기+떨림) 업데이트 */
@@ -206,6 +232,17 @@ class ClassifyViewModel @Inject constructor(
         private const val ACTIVE_CHANNEL_THRESHOLD = 0.01f
         private const val MAX_QUIET_ACTIVE_CHANNELS = 1
         private const val REST_HYSTERESIS_MS = 100L
+
+        // "이건 노이즈가 아니라 확실히 근수축이다"로 볼 수 있는 임계값 — ACTIVE_CHANNEL_
+        // THRESHOLD(0.01, 노이즈와 거의 붙어있는 낮은 값)보다 훨씬 높게 잡아야, "활성
+        // 채널 1개까지는 그냥 노이즈로 봐준다"는 MAX_QUIET_ACTIVE_CHANNELS 관용 범위 안에서도
+        // "그 1개가 사실 진짜 신호"인 경우를 구분해서 rest로 잘못 넘어가지 않게 함. 값 자체는
+        // sup/pro 튜닝 이전(threshold=0.02)에 "일반적인 신호 있음" 기준으로 실측 검증됐던
+        // 값을 재사용한 초기값 — flexion/extension/close처럼 강한 제스처엔 충분히 낮지만,
+        // sup/pro의 약한 CH6/7 신호까지 확실히 잡는지는 아직 실기기로 재검증 안 함
+        // (RECOGNITION_IMPROVEMENT.md 참고, 필요하면 이전처럼 실측 데이터 시뮬레이션으로
+        // 튜닝할 것).
+        private const val STRONG_SIGNAL_THRESHOLD = 0.02f
 
         // "센서 살아있음" 판정 — WaveformScreen.kt의 NO_SIGNAL_THRESHOLD(raw 0~255
         // 기준 5)와 동일한 값. 64샘플(~50ms @1281Hz) 윈도우 안에서의 최대-최소 스프레드.

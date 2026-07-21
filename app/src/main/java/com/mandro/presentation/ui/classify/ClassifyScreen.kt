@@ -61,6 +61,12 @@ private const val INTENSITY_GAMMA = 0.5f
 // ClassifyViewModel의 ACTIVE_CHANNEL_THRESHOLD와 동일한 값 유지 (RECOGNITION_IMPROVEMENT.md 3차)
 private const val LOW_SIGNAL_THRESHOLD = 0.01f
 private const val LOW_SIGNAL_ALPHA = 0.25f
+// rest에서 "센서가 데이터를 수신 중"임을 보이기 위한 최소 표시 길이(비율) —
+// channelHasSignal(raw 값 스프레드 기반)이 true인데 intensity가 baseline 보정으로
+// 거의 0이라 길이가 중심점(반지름 4dp) 밑에 완전히 파묻혀 "안 그려짐"처럼 보이던
+// 문제 수정. intensity 자체나 색상 로직은 안 건드리고 "그리는 길이"에만 하한을 둠 —
+// channelHasSignal이 false(진짜 무신호)면 이 하한 자체를 안 씀.
+private const val MIN_ALIVE_LENGTH_RATIO = 0.12f
 // 길이가 짧을 때(rest 근처)는 각도 흔들림도 비례해서 줄임 — 안 그러면 짧은 길이
 // 대비 각도 흔들림 폭이 상대적으로 훨씬 커 보여서 산만해짐.
 private const val STUB_ANGLE_DEVIATION_SCALE = 0.4f
@@ -204,11 +210,18 @@ private fun ClassifyContent(
                 val isActive = intensity >= LOW_SIGNAL_THRESHOLD
 
                 // 길이 = "근육이 활성 상태인가"(baseline 대비 편차, channelIntensity).
-                // rest에서 0에 가까운 게 정상 — 실제 값이 작으면 짧게, 가짜 최소
-                // 길이로 채우지 않음 (고정값을 넣으면 "이게 진짜 신호인지 디폴트인지"
-                // 헷갈림 — 신호가 살아있다는 건 길이가 아니라 색상(channelHasSignal)로
-                // 전달함).
-                val length = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
+                // rest에서 0에 가까운 게 정상이라 실제 값 그대로면 길이도 거의 0 —
+                // 근데 그러면 "신호가 살아있다"를 색상으로 표현해도 선 자체가 안 보여서
+                // 무의미해짐. 그래서 channelHasSignal(센서가 실제로 데이터를 보내는
+                // 중)이 true일 때만 최소 길이를 보장함 — intensity 값 자체를 위조하는
+                // 게 아니라 "그리는 길이"에만 하한을 두는 것. hasSignal이 false(진짜
+                // 무신호)일 땐 이 하한을 안 써서 실제로 0에 가깝게 그려짐.
+                val computedLength = maxRadius * (intensity * INTENSITY_GAIN).coerceIn(0f, 1f).pow(INTENSITY_GAMMA)
+                val length = if (channelHasSignal[ch]) {
+                    maxOf(computedLength, maxRadius * MIN_ALIVE_LENGTH_RATIO)
+                } else {
+                    computedLength
+                }
                 // 색상/alpha = "센서가 실제로 데이터를 보내고 있는가"(raw 값 자체의
                 // 흔들림, channelHasSignal — baseline 보정과 무관). 이걸 intensity와
                 // 분리해야, rest처럼 intensity가 의도적으로 0에 가까운 상태에서도
