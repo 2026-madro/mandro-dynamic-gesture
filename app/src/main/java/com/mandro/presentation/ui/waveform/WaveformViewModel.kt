@@ -63,14 +63,11 @@ class WaveformViewModel @Inject constructor(
     private var smoothIdx = 0
 
     init {
-        bleRepository.setEmgEnabled(true)
+        // Collect(녹화)와 달리 이 화면은 raw를 강제로 켜지 않음 — Settings의
+        // "원본 신호 수신" 설정이 Off면 이 화면도 그대로 Off로 둔다(파형/캐리브레이션
+        // 모두 안 됨). 사용자가 Settings에서 직접 켜야 함(RAW_STREAM_TOGGLE.md 참고).
         observeBleState()
         collectEmgStream()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        bleRepository.setEmgEnabled(false)
     }
 
     private fun observeBleState() {

@@ -70,8 +70,6 @@ class MockBleRepository @Inject constructor() : BleRepository {
         _bleState.value = BleState.Disconnected
     }
 
-    override fun setEmgEnabled(enabled: Boolean) {}  // Mock에서는 항상 emit
-
     override suspend fun sendWeights(weightsBytes: ByteArray): Result<Unit> {
         _weightTransferState.value = WeightTransferState.Sending(0)
         for (percent in 20..100 step 20) {

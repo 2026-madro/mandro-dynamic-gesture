@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.core.calibration.RestCalibration
+import com.mandro.data.local.RawStreamPreferences
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
 import com.mandro.domain.model.InferenceResult
@@ -27,12 +28,18 @@ data class ClassifyUiState(
     val hasConnectedOnce: Boolean = false,
     val probabilities: Map<String, Float> = emptyMap(),
     val error: String? = null,
+    // raw EMG 스트리밍이 꺼져있으면 레이더 차트(채널 세기/살아있음 표시)를 그릴 데이터
+    // 자체가 안 들어오므로 화면에서 그냥 숨김 (RAW_STREAM_TOGGLE.md 참고). 이 화면은
+    // Collect(녹화 필수)와 달리 raw를 강제로 켜지 않고, 지금 설정값을 그대로 따름 —
+    // 추론 결과 텍스트는 raw 없이도 정상 동작하므로 인식 자체는 계속됨.
+    val rawStreamEnabled: Boolean = false,
 )
 
 @HiltViewModel
 class ClassifyViewModel @Inject constructor(
     private val bleRepository: BleRepository,
     private val restCalibration: RestCalibration,
+    private val rawStreamPreferences: RawStreamPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClassifyUiState())
@@ -66,15 +73,21 @@ class ClassifyViewModel @Inject constructor(
     private var lastLogElapsedMs = 0L
 
     init {
-        bleRepository.setEmgEnabled(true)
+        // 이 화면은 Waveform/Collect와 달리 raw를 강제로 켜지 않음 — 레이더 차트는
+        // 있으면 좋지만 필수는 아니고(추론 결과 텍스트는 raw 없이도 동작), 사용자가
+        // 전력 절약을 위해 꺼둔 걸 이 화면 진입만으로 다시 켜버리면 설정이 무의미해짐.
+        observeRawStreamPreference()
         observeBleState()
         observeInference()
         observeEmg()
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        bleRepository.setEmgEnabled(false)
+    private fun observeRawStreamPreference() {
+        viewModelScope.launch {
+            rawStreamPreferences.enabled.collect { enabled ->
+                _uiState.update { it.copy(rawStreamEnabled = enabled) }
+            }
+        }
     }
 
     private fun observeBleState() {

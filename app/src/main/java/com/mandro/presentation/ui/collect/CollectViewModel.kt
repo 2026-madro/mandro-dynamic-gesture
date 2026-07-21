@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mandro.core.calibration.RestCalibration
+import com.mandro.data.local.RawStreamPreferences
 import com.mandro.data.local.UserPreferences
 import com.mandro.domain.model.BleState
 import com.mandro.domain.model.EMG_CHANNELS
@@ -56,6 +57,7 @@ class CollectViewModel @Inject constructor(
     private val emgRepository: EmgRepository,
     private val userPreferences: UserPreferences,
     private val restCalibration: RestCalibration,
+    private val rawStreamPreferences: RawStreamPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CollectUiState())
@@ -69,15 +71,11 @@ class CollectViewModel @Inject constructor(
     private val recordingBuffer = mutableListOf<FloatArray>()
 
     init {
-        bleRepository.setEmgEnabled(true)
+        // 녹화 화면은 raw가 필수라 자동으로 켬(전력 절약 설정과 무관) — WaveformViewModel과 동일 패턴.
+        viewModelScope.launch { rawStreamPreferences.setEnabled(true) }
         observeBleState()
         startCountdown()
         collectEmgStream()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        bleRepository.setEmgEnabled(false)
     }
 
     private fun observeBleState() {

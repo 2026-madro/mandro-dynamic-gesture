@@ -41,7 +41,6 @@ interface BleRepository {
     suspend fun stopScan()
     suspend fun connect(device: BleDevice)
     suspend fun disconnect()
-    fun setEmgEnabled(enabled: Boolean)
 
     // weightsBytes: NN 가중치 + StandardScaler(mean/std) 페이로드 (53,304 bytes)
     suspend fun sendWeights(weightsBytes: ByteArray): Result<Unit>

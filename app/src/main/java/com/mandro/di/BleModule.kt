@@ -4,6 +4,7 @@ import com.mandro.BuildConfig
 import com.mandro.core.ble.BleManager
 import com.mandro.data.ble.BleRepositoryImpl
 import com.mandro.data.ble.MockBleRepository
+import com.mandro.data.local.RawStreamPreferences
 import com.mandro.domain.repository.BleRepository
 import dagger.Module
 import dagger.Provides
@@ -20,8 +21,9 @@ object BleModule {
     fun provideBleRepository(
         bleManager: BleManager,
         mockBleRepository: MockBleRepository,
+        rawStreamPreferences: RawStreamPreferences,
     ): BleRepository {
         return if (BuildConfig.USE_MOCK_BLE) mockBleRepository
-               else BleRepositoryImpl(bleManager)
+               else BleRepositoryImpl(bleManager, rawStreamPreferences)
     }
 }

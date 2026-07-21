@@ -191,11 +191,14 @@ private fun ClassifyContent(
                 center = Offset(cx, cy),
             )
 
-            // 채널별 선 — 길이는 세기(channelIntensity, 느리게 스무딩됨),
-            // 선의 흔들림은 떨림(channelJitter, 순간 편차 히스토리)으로 그려서
-            // "세기"와 "노이즈"를 시각적으로 분리함. 떨림은 "수직 거리"가 아니라
-            // "각도" 변화로 표현해서, 중심에서 멀어져도 옆 채널 부채꼴을 절대
-            // 침범하지 않도록 함 (거리로 표현하면 멀어질수록 옆으로 크게 새어나감).
+            // 채널별 선 — raw EMG 스트리밍이 꺼져있으면(RAW_STREAM_TOGGLE.md) 이
+            // 데이터 자체가 안 들어오므로 그냥 숨김(동심원/중심점만 남음). 길이는
+            // 세기(channelIntensity, 느리게 스무딩됨), 선의 흔들림은 떨림(channelJitter,
+            // 순간 편차 히스토리)으로 그려서 "세기"와 "노이즈"를 시각적으로 분리함.
+            // 떨림은 "수직 거리"가 아니라 "각도" 변화로 표현해서, 중심에서 멀어져도
+            // 옆 채널 부채꼴을 절대 침범하지 않도록 함(거리로 표현하면 멀어질수록
+            // 옆으로 크게 새어나감).
+            if (!uiState.rawStreamEnabled) return@Canvas
             CHANNEL_ANGLES_RAD.forEachIndexed { ch, angle ->
                 val intensity = channelIntensity[ch].coerceIn(0f, 1f)
                 val isActive = intensity >= LOW_SIGNAL_THRESHOLD

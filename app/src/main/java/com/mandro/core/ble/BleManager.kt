@@ -79,8 +79,6 @@ class BleManager @Inject constructor(
     private var earlyAck: String? = null
     private var pendingNotifyEnable: kotlinx.coroutines.CancellableContinuation<Unit>? = null
 
-    @Volatile var emgEnabled = false
-
     // ── 스캔 ──────────────────────────────────────────────────
 
     // 이 앱이 블루투스 스캔을 할 수 있는 권한이 있는지를 시스템에게 확인받는 함수
@@ -510,6 +508,32 @@ class BleManager @Inject constructor(
         }
     }
 
+    /**
+     * raw EMG(...56) Characteristic의 CCCD를 명시적으로 켰다 껐다 함 — 연결 시
+     * 최초 구독(enableNotify)과는 별개로, 사용자가 RawStreamPreferences를 바꿀 때마다
+     * BleRepositoryImpl이 이 함수를 호출해서 실제 라디오 송신 여부를 제어함
+     * (RAW_STREAM_TOGGLE.md 옵션 A). CCCD를 0x0000으로 쓰면 펌웨어가 실제로 notify를
+     * 안 보내게 되는 표준 BLE 동작을 그대로 활용 — 앱 쪽 로컬 필터가 아님.
+     */
+    fun setRawEmgSubscribed(enabled: Boolean) {
+        val g = gatt ?: return
+        try {
+            val service = g.getService(java.util.UUID.fromString(EMG_SERVICE_UUID)) ?: return
+            val char = service.getCharacteristic(java.util.UUID.fromString(EMG_CHARACTERISTIC_UUID)) ?: return
+            g.setCharacteristicNotification(char, enabled)
+            val desc = char.descriptors.firstOrNull() ?: return
+            desc.value = if (enabled) {
+                BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            } else {
+                BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+            }
+            g.writeDescriptor(desc)
+            Log.d(TAG, "raw EMG 구독 상태 변경 요청: enabled=$enabled")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "raw EMG 구독 상태 변경 실패", e)
+        }
+    }
+
     private fun subscribeInferChar(gatt: BluetoothGatt, service: android.bluetooth.BluetoothGattService) {
         val inferChar = service.getCharacteristic(java.util.UUID.fromString(INFER_CHARACTERISTIC_UUID))
         if (inferChar != null) {
@@ -536,7 +560,10 @@ class BleManager @Inject constructor(
      * byte[s*8 + ch] → 채널 ch의 s번째 샘플값 (0~255)
      */
     private fun parseEmgPacket(bytes: ByteArray) {
-        if (!emgEnabled) return
+        // raw EMG 구독 여부(CCCD)는 setRawEmgSubscribed()로 관리 — 구독 안 돼있으면
+        // 펌웨어가 애초에 notify를 안 보내므로 이 함수 자체가 호출 안 됨. 예전엔
+        // 여기서 로컬 플래그(emgEnabled)로 한 번 더 걸렀는데, 그건 "펌웨어는 계속
+        // 보내는데 앱만 무시"하는 거라 전력 절약 효과가 없어서 제거함(RAW_STREAM_TOGGLE.md).
         if (bytes.size != PACKET_SIZE) {
             Log.w(TAG, "예상치 못한 패킷 크기: ${bytes.size} bytes (기대값: $PACKET_SIZE) — 드롭")
             return
