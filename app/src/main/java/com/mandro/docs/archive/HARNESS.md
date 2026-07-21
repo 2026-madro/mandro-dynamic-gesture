@@ -1,3 +1,13 @@
+> ⚠️ **부분 구버전 문서 (2026-07-20 archive 처리)**. 섹션 2("절대 수정 금지:
+> `core/util/EmgFeatureExtractor.kt` 등")는 더 이상 유효하지 않음 — 그
+> 전제(Python과 수치를 맞춰야 하는 Kotlin 포팅본이 실제 쓰인다)가 Chaquopy
+> 전환 이후 거짓이 됐고, 해당 파일은 현재 코드 어디서도 안 쓰이는 죽은
+> 코드로 남아있음(`core/emg/EmgFeatureExtractor.kt`로 위치만 이동). 나머지
+> 섹션(Compose/MVVM 아키텍처 규칙)은 여전히 유효함. 최신 아키텍처는 루트
+> `HANDOVER.md` 참고.
+
+---
+
 # mandro — AI 코딩 하네스 (Harness Engineering)
 
 > AI 코딩 어시스턴트(Cursor, Copilot 등)가 프론트엔드 개발 시  

@@ -1,3 +1,10 @@
+> ⚠️ **중복 문서 (2026-07-20 archive 처리)**. 내용 자체는 틀리지 않지만
+> `docs/FIRMWARE_PROTOCOL.md`가 가중치 수신 프로토콜(Characteristic 3) 등을
+> 포함해 더 최신/상세하게 같은 내용을 다룸. 최신 BLE 스펙은
+> `docs/FIRMWARE_PROTOCOL.md`를 볼 것.
+
+---
+
 # BLE 프로토콜 명세 — Android 구현용
 
 > 소스: `firmware/exo_armband_hybrid/exo_armband_hybrid.ino`  
