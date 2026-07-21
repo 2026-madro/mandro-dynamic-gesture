@@ -63,9 +63,13 @@ class ClassifyViewModel @Inject constructor(
     val channelHasSignal = BooleanArray(EMG_CHANNELS)
 
     // rest 강제 판정 (RECOGNITION_IMPROVEMENT.md 참고) — 활성 채널(세기가
-    // ACTIVE_CHANNEL_THRESHOLD 이상)이 1개 이하인 상태가 REST_HYSTERESIS_MS 이상
-    // 지속되면 NN 예측과 무관하게 rest로 덮어씀. 전체 무신호와 단일 채널 노이즈
-    // 튐을 하나의 규칙으로 처리.
+    // ACTIVE_CHANNEL_THRESHOLD 이상)이 하나도 없는 상태가 REST_HYSTERESIS_MS 이상
+    // 지속되면 NN 예측과 무관하게 rest로 덮어씀. 채널 하나라도 뛰면 rest 아님
+    // (2026-07-21) — 이전엔 MAX_QUIET_ACTIVE_CHANNELS=1로 단일 채널 노이즈 튐을
+    // 봐줬는데, "값 하나라도 뛰면 rest로 바꾸지 말 것"이라는 명시적 요청으로 0으로
+    // 바꿈. 트레이드오프: 순수 센서 노이즈만으로 한 채널이 threshold를 넘어도
+    // rest가 깨질 수 있음(감수하기로 함) — 실기기에서 노이즈로 인한 rest 깜빡임이
+    // 심하면 ACTIVE_CHANNEL_THRESHOLD를 올리는 쪽으로 재검토할 것.
     private var quietSinceElapsedMs: Long? = null
 
     // rest 판정 threshold 튜닝용 raw 데이터 로그 (RECOGNITION_IMPROVEMENT.md 3차 참고)
@@ -230,13 +234,13 @@ class ClassifyViewModel @Inject constructor(
         // sup/pro가 rest로 오분류되는 비율이 58~88%에 달했음 — 0.01로 낮춰서
         // sup/pro 오분류 0.4~5.9%로 개선 (rest 정확도는 100%→93.8%, hysteresis로 보완).
         private const val ACTIVE_CHANNEL_THRESHOLD = 0.01f
-        private const val MAX_QUIET_ACTIVE_CHANNELS = 1
+        private const val MAX_QUIET_ACTIVE_CHANNELS = 0
         private const val REST_HYSTERESIS_MS = 100L
 
-        // "이건 노이즈가 아니라 확실히 근수축이다"로 볼 수 있는 임계값 — ACTIVE_CHANNEL_
-        // THRESHOLD(0.01, 노이즈와 거의 붙어있는 낮은 값)보다 훨씬 높게 잡아야, "활성
-        // 채널 1개까지는 그냥 노이즈로 봐준다"는 MAX_QUIET_ACTIVE_CHANNELS 관용 범위 안에서도
-        // "그 1개가 사실 진짜 신호"인 경우를 구분해서 rest로 잘못 넘어가지 않게 함. 값 자체는
+        // "이건 노이즈가 아니라 확실히 근수축이다"로 볼 수 있는 임계값. 채널 하나라도
+        // ACTIVE_CHANNEL_THRESHOLD를 넘으면 이제 곧바로 forceRest 조건에서 빠지므로
+        // (MAX_QUIET_ACTIVE_CHANNELS=0), 이 값은 "NN이 rest라고 오분류해도 강제로
+        // 뒤집을지"를 결정하는 별도 기준으로만 쓰임(§observeInference). 값 자체는
         // sup/pro 튜닝 이전(threshold=0.02)에 "일반적인 신호 있음" 기준으로 실측 검증됐던
         // 값을 재사용한 초기값 — flexion/extension/close처럼 강한 제스처엔 충분히 낮지만,
         // sup/pro의 약한 CH6/7 신호까지 확실히 잡는지는 아직 실기기로 재검증 안 함
