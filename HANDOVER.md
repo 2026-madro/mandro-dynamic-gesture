@@ -377,6 +377,24 @@ if (is_notification) {
 서드파티 코드라 우리가 수정한 게 아니고, 그냥 원래 있던 표준 동작을 이번에 처음
 활용한 것.
 
+**`BLE2902`는 뭐냐 — CCCD를 표현하는 라이브러리 제공 클래스**: `BLEDescriptor`를
+상속받은 특화 클래스로, UUID가 `0x2902`로 고정돼있고 내부적으로 2바이트만
+들고 있음(`byte[0]`의 bit 0 = notification on/off, bit 1 = indication on/off).
+`setup()`에서 Characteristic마다(`...56`/`...57`/`...58`) `addDescriptor(new
+BLE2902())`로 각각 독립된 인스턴스가 붙어서, 구독 상태를 Characteristic별로
+따로 관리함 — 그래서 raw EMG만 구독 해제하고 추론 결과는 계속 구독 유지하는
+게 가능함.
+
+**안드로이드가 쓴 CCCD 값이 실제로 어떻게 저장되는가** (구독 설정 방향,
+안드로이드→ESP32): `BleManager.kt::setRawEmgSubscribed()`가
+`gatt.writeDescriptor(desc)`를 호출하면 BLE 무선으로 ATT Write Request가
+ESP32에 도착 → 라이브러리의 `BLEDescriptor.cpp::handleGATTServerEvent()`가
+`ESP_GATTS_WRITE_EVT` 이벤트를 받아서 `setValue(param->write.value,
+param->write.len)`을 호출 → 이게 `BLE2902` 객체의 그 2바이트 메모리에 값을
+그대로 저장함. 이후 `notify()`가 호출될 때마다 `getNotifications()`가 읽는
+값이 바로 이것. **이 저장 경로도 전부 라이브러리 안에서 일어나고, 우리
+펌웨어/안드로이드 코드는 "쓰기 요청을 보내고 결과를 확인"만 함.**
+
 **구현 파일**
 - `app/src/main/java/com/mandro/data/local/RawStreamPreferences.kt`: DataStore
   기반 On/Off 설정, 기본값 `false`(Off)

@@ -40,15 +40,17 @@
 | Service UUID | `12345678-1234-1234-1234-1234567890ab` |
 | Characteristic UUID (raw EMG) | `abcd1234-5678-1234-5678-abcdef123456` |
 | Characteristic UUID (추론 결과) | `abcd1234-5678-1234-5678-abcdef123457` |
+| Characteristic UUID (가중치 수신) | `abcd1234-5678-1234-5678-abcdef123458` |
 
-> UUID 마지막 두 자리만 다름: `...56` = EMG, `...57` = 예측
+> UUID 마지막 두 자리만 다름: `...56` = EMG, `...57` = 예측, `...58` = 가중치 수신(§4-1)
 
 **Characteristic 속성:**
 
 | Characteristic | 속성 | CCCD |
 |---|---|---|
-| raw EMG (`...56`) | NOTIFY only | BLE2902 포함, `0x0001` 쓰기로 활성화 |
-| 추론 결과 (`...57`) | READ + NOTIFY | BLE2902 포함, `0x0001` 쓰기로 활성화 |
+| raw EMG (`...56`) | NOTIFY only | BLE2902 포함, `0x0001`/`0x0000`로 구독 켜고 끌 수 있음(전력 절약, §3 참고) |
+| 추론 결과 (`...57`) | READ + NOTIFY | BLE2902 포함, `0x0001` 쓰기로 활성화, 항상 구독 유지 |
+| 가중치 수신 (`...58`) | WRITE + NOTIFY | BLE2902 포함, `0x0001` 쓰기로 응답 NOTIFY 활성화 (§4-1) |
 
 ---
 
@@ -103,7 +105,40 @@ fun parseEmgPacket(bytes: ByteArray): Array<IntArray> {
 ### 용도
 
 - 실시간 파형 시각화 (신호 탭 8채널 파형)
-- 데이터 수집 화면에서 raw 데이터 버퍼링 후 서버 업로드
+- 데이터 수집 화면에서 raw 데이터 버퍼링 후 로컬 학습(§9 참고 — 서버 업로드 아님)
+
+### 전력 절약 — 이 Characteristic만 구독 껐다 켤 수 있음 (2026-07-20)
+
+`RawStreamPreferences`/`BleManager.kt::setRawEmgSubscribed()`(HANDOVER.md §5.6
+참고)가 이 Characteristic의 CCCD를 사용자 설정에 따라 `0x0000`/`0x0001`로
+다시 쓴다. **펌웨어 코드는 전혀 안 바뀜** — `loop()`의 `notify()` 호출은
+여전히 무조건 실행되고, 실제로 무선이 나가는지는 라이브러리가 CCCD를 보고
+알아서 판단한다. 추론 결과(`...57`)는 이 전력 절약 대상이 아니라 항상 구독
+유지가 기본 — 인식 기능 자체가 이 스트림에 의존하기 때문.
+
+**동작 원리 — CCCD 값이 저장되고 확인되는 경로**:
+
+1. **구독 설정 방향 (Android → ESP32)**: `gatt.writeDescriptor(desc)`로 BLE
+   무선 ATT Write Request가 ESP32에 도착 → 라이브러리
+   (`BLEDescriptor.cpp::handleGATTServerEvent()`)가 `ESP_GATTS_WRITE_EVT`를
+   받아서 `setValue(param->write.value, param->write.len)` 호출 → 이게
+   `BLE2902` 객체(`addDescriptor(new BLE2902())`로 붙여둔 것)의 2바이트
+   메모리에 값을 저장함. `BLE2902`는 `BLEDescriptor`를 상속한 CCCD 전용
+   클래스로, `byte[0]`의 bit 0이 notification on/off를 뜻함
+   (`BLE2902::getNotifications()`/`setNotifications()`가 이 비트를
+   읽고/씀). Characteristic마다(raw EMG/추론/가중치) 독립된 `BLE2902`
+   인스턴스가 있어서 구독 상태가 서로 안 섞임.
+2. **데이터 알림 방향 (ESP32 → Android)**: `notify()`가 호출될 때마다
+   라이브러리(`BLECharacteristic.cpp::notify()`)가
+   `p2902->getNotifications()`로 위에서 저장된 값을 읽고, 꺼져있으면 실제
+   무선 송신 함수(`esp_ble_gatts_send_indicate`) 호출 전에 `return`해버림 —
+   앱단 필터가 아니라 **ESP32 BLE 스택 내부에서 무선 송신 자체가 스킵됨**.
+
+이 저장/확인 로직 전부 ESP32 BLE 라이브러리(`C:\Arduino15\packages\esp32\
+hardware\esp32\<버전>\libraries\BLE\src\`, 프로젝트 시작 때부터 있던
+서드파티 코드, 우리가 수정한 적 없음) 안에서 일어난다 — 펌웨어/안드로이드
+코드는 각각 "쓰기 요청을 보내고 결과 확인" / "notify를 무조건 부르고 파싱"만
+한다.
 
 ---
 
