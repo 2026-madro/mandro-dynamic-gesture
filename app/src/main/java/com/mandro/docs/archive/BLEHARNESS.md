@@ -1,3 +1,9 @@
+> ⚠️ **구버전 문서 (2026-07-22 archive됨)** — Teensy 시절(F01/F02 스프린트,
+> 2026-06-30) AI 작업 가이드라인. 하드웨어가 ESP32-S3로 바뀌고 BLE 연동이
+> 완료된 지금은 이 문서가 전제하는 상황 자체가 지났음. 현재 BLE 구현/프로토콜은
+> [`HANDOVER.md`](../../../../../../../../HANDOVER.md) §3, §5,
+> [`FIRMWARE_PROTOCOL.md`](../FIRMWARE_PROTOCOL.md) 참고. 히스토리 보존 목적으로만 남김.
+
 # mandro — BLE 연동 하네스 (Harness Engineering)
 
 > AI 코딩 어시스턴트가 BLE 실제 연동 작업 시  
