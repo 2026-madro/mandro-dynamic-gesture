@@ -2,6 +2,7 @@ package com.mandro.presentation.ui.user
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mandro.data.local.UserPreferences
 import com.mandro.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +27,7 @@ data class UserCreateUiState(
 @HiltViewModel
 class UserCreateViewModel @Inject constructor(
     private val userRepository: UserRepository,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UserCreateUiState())
@@ -57,7 +59,12 @@ class UserCreateViewModel @Inject constructor(
                     name = state.name.trim(),
                     researchConsent = state.consentResearch,
                 )
-            }.onSuccess {
+            }.onSuccess { user ->
+                // 이 화면 다음(onStart)이 Home의 유저 선택(HomeViewModel.onUserSelected,
+                // saveUserId 호출)을 안 거치고 바로 BleScan으로 가므로, 여기서 직접
+                // 활성 유저로 지정 안 하면 예전 활성 유저가 그대로 남아서 새로 만든
+                // 유저가 아니라 그쪽에 녹화가 기록되는 문제가 있었음(2026-07-21).
+                userPreferences.saveUserId(user.id)
                 _navigateNext.send(Unit)
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, error = e.message ?: "오류가 발생했어요") }
