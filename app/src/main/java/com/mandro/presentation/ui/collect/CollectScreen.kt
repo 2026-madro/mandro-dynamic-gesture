@@ -300,19 +300,19 @@ private fun CollectContent(
         Spacer(Modifier.height(24.dp))
 
         // 개발 전용 스킵 버튼
-        if (BuildConfig.DEBUG) {
-            TextButton(
-                onClick = onDebugSkip,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "[DEV] 다음 화면으로 →",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MandroPalette.Danger600,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-        }
+        // if (BuildConfig.DEBUG) {
+        //     TextButton(
+        //         onClick = onDebugSkip,
+        //         modifier = Modifier.fillMaxWidth(),
+        //     ) {
+        //         Text(
+        //             text = "[DEV] 다음 화면으로 →",
+        //             style = MaterialTheme.typography.labelMedium,
+        //             color = MandroPalette.Danger600,
+        //         )
+        //     }
+        //     Spacer(Modifier.height(8.dp))
+        // }
 
         // 랩 내 동작 현황
         Text(
