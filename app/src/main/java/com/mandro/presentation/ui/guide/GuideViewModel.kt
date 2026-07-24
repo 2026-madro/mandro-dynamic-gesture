@@ -18,8 +18,6 @@ data class GestureGuide(
     val nameKo: String,         // 한 줄 설명 (한글)
     val description: String,    // 이렇게 해보세요 본문
     val caution: String?,       // 주의사항 (없으면 null)
-    // TODO: Lottie 파일 추가 시 val lottieRes: Int 필드 추가
-    //       ex) lottieRes = R.raw.gesture_flexion
 )
 
 val GESTURE_GUIDES = mapOf(

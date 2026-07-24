@@ -1,11 +1,13 @@
 package com.mandro.presentation.ui.guide
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,9 +17,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -27,6 +39,9 @@ import com.mandro.presentation.components.MandroPrimaryButton
 import com.mandro.presentation.components.MandroSecondaryButton
 import com.mandro.presentation.theme.MandroPalette
 import com.mandro.presentation.theme.MandroTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @Composable
 fun GuideScreen(
@@ -139,25 +154,8 @@ private fun GuideContent(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // 일러스트 영역
-                        // TODO: Lottie 파일 준비 후 아래 Box를 LottieAnimation으로 교체
-                        // 교체 예시:
-                        // val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(guide.lottieRes))
-                        // val progress by animateLottieCompositionAsState(composition, iterations = LottieConstants.IterateForever)
-                        // LottieAnimation(composition, { progress }, modifier = Modifier.fillMaxWidth().height(220.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .background(MandroPalette.Neutral100, RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "동작 일러스트",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MandroPalette.Neutral300,
-                            )
-                        }
+                        // 일러스트 영역 — assets/gesture_guides/<동작>/f01~f12.jpg 프레임을 순환 재생
+                        GestureFrameAnimation(gestureKey = guide.name)
 
                         Spacer(Modifier.height(24.dp))
 
@@ -238,6 +236,52 @@ private fun GuideContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GestureFrameAnimation(gestureKey: String) {
+    val context = LocalContext.current
+    val folder = "gesture_guides/${gestureKey.lowercase()}"
+
+    var frames by remember(folder) { mutableStateOf<List<ImageBitmap>>(emptyList()) }
+    var frameIndex by remember(folder) { mutableIntStateOf(0) }
+
+    LaunchedEffect(folder) {
+        frameIndex = 0
+        frames = withContext(Dispatchers.IO) {
+            val names = context.assets.list(folder)?.sorted() ?: emptyList()
+            names.map { name ->
+                context.assets.open("$folder/$name").use { BitmapFactory.decodeStream(it) }.asImageBitmap()
+            }
+        }
+    }
+
+    LaunchedEffect(frames) {
+        if (frames.isEmpty()) return@LaunchedEffect
+        while (true) {
+            delay(120)
+            frameIndex = (frameIndex + 1) % frames.size
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(MandroPalette.Neutral100, RoundedCornerShape(16.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        frames.getOrNull(frameIndex)?.let { bitmap ->
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop,
+            )
         }
     }
 }
